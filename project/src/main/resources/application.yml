@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:h2:mem:docchat;MODE=MySQL;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:~/docchat;MODE=MySQL;AUTO_SERVER=TRUE
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -25,3 +25,6 @@ management:
     web:
       exposure:
         include: health,info
+
+app:
+  upload-dir: uploads

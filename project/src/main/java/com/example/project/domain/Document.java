@@ -26,6 +26,11 @@ public class Document {
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Column(nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
+
+    
+
     public Long getId() {
         return id;
     }
