@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>문서 업로드 테스트</title>
+</head>
+<body>
+<h1>문서 업로드 테스트 페이지</h1>
+
+<hr>
+
+<!-- 1. 문서 생성 폼 (제목만) -->
+<h2>1. 문서 생성</h2>
+<form id="create-form">
+    <label>
+        제목:
+        <input type="text" id="title-input" required>
+    </label>
+    <button type="submit">문서 생성</button>
+</form>
+
+<p>
+    생성된 문서 ID: <span id="created-id">없음</span>
+</p>
+
+<pre id="create-result"></pre>
+
+<hr>
+
+<!-- 2. 파일 업로드 폼 -->
+<h2>2. PDF 파일 업로드</h2>
+<form id="upload-form">
+    <label>
+        문서 ID:
+        <input type="number" id="doc-id-input" required>
+    </label>
+    <br><br>
+    <label>
+        PDF 파일:
+        <input type="file" id="file-input" accept="application/pdf" required>
+    </label>
+    <br><br>
+    <button type="submit">파일 업로드</button>
+</form>
+
+<pre id="upload-result"></pre>
+
+<script>
+    // 1) 문서 생성
+    const createForm = document.getElementById('create-form');
+    const titleInput = document.getElementById('title-input');
+    const createdIdSpan = document.getElementById('created-id');
+    const createResult = document.getElementById('create-result');
+
+    createForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const title = titleInput.value.trim();
+        if (!title) {
+            alert('제목을 입력해주세요.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/documents', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ title })
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                createResult.textContent = '에러: ' + res.status + '\n' + text;
+                return;
+            }
+
+            const data = await res.json();
+            createdIdSpan.textContent = data.id;
+            createResult.textContent = JSON.stringify(data, null, 2);
+
+            // 업로드 폼의 문서 ID 입력칸에도 자동으로 채워주기
+            document.getElementById('doc-id-input').value = data.id;
+
+        } catch (err) {
+            createResult.textContent = '요청 실패: ' + err;
+        }
+    });
+
+    // 2) PDF 파일 업로드
+    const uploadForm = document.getElementById('upload-form');
+    const docIdInput = document.getElementById('doc-id-input');
+    const fileInput = document.getElementById('file-input');
+    const uploadResult = document.getElementById('upload-result');
+
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const docId = docIdInput.value;
+        const file = fileInput.files[0];
+
+        if (!docId) {
+            alert('문서 ID를 입력하거나 위에서 먼저 문서를 생성해주세요.');
+            return;
+        }
+        if (!file) {
+            alert('PDF 파일을 선택해주세요.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch(`/documents/${docId}/file`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                uploadResult.textContent = '에러: ' + res.status + '\n' + text;
+                return;
+            }
+
+            const data = await res.json();
+            uploadResult.textContent = JSON.stringify(data, null, 2);
+
+        } catch (err) {
+            uploadResult.textContent = '요청 실패: ' + err;
+        }
+    });
+</script>
+
+</body>
+</html>
