@@ -50,7 +50,7 @@ public class DocumentController {
     }
 
     @PostMapping("/documents/{id}/upload")
-    public DocumentResponse upload(@PathVariable Long id, @RequestParam("file") MultipartFile file) throws IOException {
+    public DocumentResponse upload(@PathVariable("id") Long id, @RequestParam("file") MultipartFile file) throws IOException {
 
         Document d = documentService.uploadFile(id, file);
         return DocumentResponse.from(d);

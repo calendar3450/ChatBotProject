@@ -45,6 +45,29 @@
 
 <pre id="upload-result"></pre>
 
+
+<!-- 3. 문서 목록 조회 -->
+<h2>3. 문서 목록 조회</h2>
+<button id="load-documents-btn">문서 목록 불러오기</button>
+
+<table border="1" style="margin-top: 10px; border-collapse: collapse;">
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>제목</th>
+        <th>상태</th>
+        <th>파일 경로</th>
+        <th>생성일</th>
+    </tr>
+    </thead>
+    <tbody id="documents-tbody">
+    <!-- 여기에 JS로 행이 추가됩니다 -->
+    </tbody>
+</table>
+
+<pre id="documents-raw"></pre>
+
+
 <script>
     // 1) 문서 생성
     const createForm = document.getElementById('create-form');
@@ -113,7 +136,7 @@
         formData.append('file', file);
 
         try {
-            const res = await fetch(`/documents/${docId}/file`, {
+            const res = await fetch(`/documents/${docId}/upload`, {
                 method: 'POST',
                 body: formData
             });
@@ -129,6 +152,59 @@
 
         } catch (err) {
             uploadResult.textContent = '요청 실패: ' + err;
+        }
+    });
+
+     // 3) 문서 목록 조회
+    const loadBtn = document.getElementById('load-documents-btn');
+    const docsTbody = document.getElementById('documents-tbody');
+    const docsRaw = document.getElementById('documents-raw');
+
+    loadBtn.addEventListener('click', async () => {
+        try {
+            const res = await fetch('/documents', { method: 'GET' });
+
+            if (!res.ok) {
+                const text = await res.text();
+                docsRaw.textContent = '에러: ' + res.status + '\n' + text;
+                return;
+            }
+
+            const data = await res.json();
+            docsRaw.textContent = JSON.stringify(data, null, 2);
+
+            // 테이블 비우고 다시 채우기
+            docsTbody.innerHTML = '';
+
+            data.forEach(doc => {
+                const tr = document.createElement('tr');
+
+                const tdId = document.createElement('td');
+                tdId.textContent = doc.id;
+
+                const tdTitle = document.createElement('td');
+                tdTitle.textContent = doc.title;
+
+                const tdStatus = document.createElement('td');
+                tdStatus.textContent = doc.status;
+
+                const tdPath = document.createElement('td');
+                tdPath.textContent = doc.filePath || '(없음)';
+
+                const tdCreatedAt = document.createElement('td');
+                tdCreatedAt.textContent = doc.createAt || '';
+
+                tr.appendChild(tdId);
+                tr.appendChild(tdTitle);
+                tr.appendChild(tdStatus);
+                tr.appendChild(tdPath);
+                tr.appendChild(tdCreatedAt);
+
+                docsTbody.appendChild(tr);
+            });
+
+        } catch (err) {
+            docsRaw.textContent = '요청 실패: ' + err;
         }
     });
 </script>

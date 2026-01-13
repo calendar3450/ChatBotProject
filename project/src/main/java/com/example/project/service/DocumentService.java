@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -56,6 +57,7 @@ public class DocumentService {
         //DB 업데이트
         d.setFilePath(target.toString());
         d.setStatus(DocumentStatus.UPLOADED);
+        d.setCreatedAt(LocalDateTime.now());
         return documentRepository.save(d);
     }
 
