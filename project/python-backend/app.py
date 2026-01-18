@@ -8,22 +8,22 @@ import numpy as np
 import faiss
 import json
 import requests
+from fastapi import Body
+from fastapi.responses import JSONResponse
+
 
 app = FastAPI()
 
 # ✅ 임베딩 모델 (멀티링구얼)
 # e5 계열은 query에 "query: ", 문서에 "passage: " prefix 권장
 EMBED_MODEL_NAME = "intfloat/multilingual-e5-base"
-embed_model = SentenceTransformer(EMBED_MODEL_NAME)
+embed_model = SentenceTransformer(EMBED_MODEL_NAME, device="cpu")
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 OLLAMA_BASE = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.1"
-
-
-
+OLLAMA_MODEL = "qwen2.5:7b"
 
 
 class PingResponse(BaseModel):
@@ -35,6 +35,7 @@ def ping():
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+
 
 class IngestRequest(BaseModel):
     document_id: int
@@ -59,6 +60,27 @@ class ChatResponse(BaseModel):
     citations: list[dict]
 
 
+# 테스트용 코드 깨진 한글 잡기 위해 사용.
+def ollama_chat_korean(user_text: str) -> str:
+    url = f"{OLLAMA_BASE}/api/chat"
+    payload = {
+        "model": OLLAMA_MODEL,
+        "stream": False,
+        "options": {"temperature": 0.2},
+        "messages": [
+            {"role": "system", "content": "당신은 한국어로만 답합니다. 중국어/영어를 절대 사용하지 마세요. 출력은 자연스러운 한국어 문장으로만 작성하세요."},
+            {"role": "user", "content": user_text}
+        ]
+    }
+
+    r = requests.post(url, json=payload, timeout=120)
+    r.raise_for_status()
+
+    # ✅ bytes -> utf-8 로 확정 디코딩 후 JSON 파싱
+    data = json.loads(r.content.decode("utf-8"))
+    return (data["message"]["content"] or "").strip()
+
+
 def extract_pdf_text(file_path: str):
     p = Path(file_path)
 
@@ -66,16 +88,13 @@ def extract_pdf_text(file_path: str):
         raise FileNotFoundError(f"File not found: {p}")
     
     reader = PdfReader(str(p))
-    page_count = len(reader.pages)
     
-    texts =[]
-    for i ,page in enumerate(reader.pages):
+    pages = []
+    for i, page in enumerate(reader.pages):
         text = page.extract_text() or ""
-        if text:
-            texts.append(text)
-    
-    full_text = "\n".join(texts)
-    return full_text, page_count
+        pages.append({"page": i + 1, "text": text})
+
+    return pages
 
 def chunk_pages(pages, chunk_chars,overlap):
     chunks =[]
@@ -125,7 +144,7 @@ def chunk_pages(pages, chunk_chars,overlap):
 def embed_passages(texts):
     # e5는 passage prefix 권장
     inputs = [f"passage: {t}" for t in texts]
-    vecs = embed_model.encode(inputs, normalize_embeddings=True)
+    vecs = embed_model.encode(inputs, normalize_embeddings=True, device="cpu")
     return np.array(vecs, dtype="float32")
 
 def embed_query(q):
@@ -161,19 +180,22 @@ def load_doc_store(doc_id):
     index = faiss.read_index(str(index_path))
     return chunks, index
 
-def ollama_generate(prompt):
-    """
-    Ollama 로컬 LLM 호출.
-    """
+
+
+def ollama_generate(prompt: str) -> str:
     url = f"{OLLAMA_BASE}/api/generate"
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False
     }
+
     r = requests.post(url, json=payload, timeout=120)
     r.raise_for_status()
-    return r.json().get("response", "")
+
+    # ✅ 핵심: bytes -> utf-8 로 확정 디코딩 후 JSON 파싱
+    data = json.loads(r.content.decode("utf-8"))
+    return (data.get("response") or "").strip()
 
 
 @app.post("/ingest", response_model=IngestResponse)
@@ -193,8 +215,10 @@ def ingest(req: IngestRequest):
 
         return IngestResponse(
             document_id=req.document_id,
-            chunks=len(chunks),
-            message="Ingested: chunks saved + embeddings indexed"
+            received=True,
+            extracted_chars=total_chars,
+            page_count=len(pages),
+            message=f"Ingested: {len(chunks)} chunks saved + embeddings indexed"
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -235,6 +259,9 @@ def chat(req: ChatRequest):
         prompt = f"""당신은 업로드된 PDF 문서를 기반으로 답하는 도우미입니다.
             아래 [근거]에 있는 내용만 사용해서 답하세요.
             근거에 없으면 "문서에서 확인되지 않습니다"라고 말하세요.
+            너는 한국어 문서를 읽고 한국어로 정확히 답변하는 AI다.
+            반드시 **UTF-8 인코딩의 한국어**로만 답변하라.
+            깨진 문자, 외국어, 기호를 사용하지 마라.
 
                 [질문]
                 {req.question}
@@ -254,3 +281,10 @@ def chat(req: ChatRequest):
         raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
+    
+
+@app.post("/llm_test")
+def llm_test(prompt: str = Body(..., embed=True)):
+    out = ollama_chat_korean(prompt)
+    # ✅ charset 명시(클라이언트 오해 방지)
+    return JSONResponse(content={"out": out}, media_type="application/json; charset=utf-8")
