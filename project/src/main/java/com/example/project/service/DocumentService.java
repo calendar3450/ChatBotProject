@@ -21,11 +21,14 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final Path uploadDir;
+    private final PythonClientService pythonClientService;
 
     public DocumentService(DocumentRepository documentRepository,
-        @Value("${app.upload-dir}") String uploadDir) {
+        @Value("${app.upload-dir}") String uploadDir,
+        PythonClientService pythonClientService) {
         this.documentRepository = documentRepository;
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
+        this.pythonClientService = pythonClientService;
     }
 
     public Document create(String title) {
@@ -58,9 +61,18 @@ public class DocumentService {
         d.setFilePath(target.toString());
         d.setStatus(DocumentStatus.UPLOADED);
         d.setCreatedAt(LocalDateTime.now());
-        return documentRepository.save(d);
-    }
+        Document saved = documentRepository.save(d);
 
+        try {
+            var resp = pythonClientService.ingestDocument(saved);
+            System.out.println("✅ Python ingest 응답: " + resp);
+        } catch (Exception e) {
+            // 파이썬 서버가 꺼져 있어도 업로드 자체는 실패시키고 싶지 않다면, 여기서만 로그 찍고 무시
+            System.err.println("⚠ Python ingest 호출 실패: " + e.getMessage());
+        }
+
+        return saved;
     
+}
 
 }

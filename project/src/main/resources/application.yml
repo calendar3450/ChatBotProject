@@ -7,6 +7,11 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+        
 
   jpa:
     hibernate:
@@ -31,3 +36,5 @@ app:
 
 python:
   base-url: http://localhost:8000
+
+
