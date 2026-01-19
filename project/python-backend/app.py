@@ -230,6 +230,8 @@ def ingest(req: IngestRequest):
 
 
 
+THRESHOLD = 0.80  # 처음엔 0.40로 두고, 필요하면 조정
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     try:
@@ -239,7 +241,24 @@ def chat(req: ChatRequest):
         top_k = max(1, min(req.top_k, 10))
         scores, ids = index.search(qv, top_k)
 
-        # 검색 결과 청크 수집
+        best_score = float(scores[0][0]) if top_k > 0 else -1.0
+
+        # 1) 문서 관련성이 낮으면: 일반 지식 모드
+        if best_score < THRESHOLD:
+            prompt = f"""당신은 유용한 한국어 어시스턴트입니다.
+                        사용자의 질문에 일반 상식/지식으로 친절하고 정확하게 답하세요.
+                        모르면 모른다고 말하세요.
+                        그리고 한국어로만 답변 하세요.
+
+                        [질문]
+                        {req.question}
+
+                        [답변]
+                        """
+            answer = ollama_generate(prompt).strip()
+            return ChatResponse(answer=answer, citations=[])
+
+        # 2) 문서 관련성이 충분하면: 문서 근거 모드 (RAG)
         picked = []
         citations = []
         for rank, idx in enumerate(ids[0].tolist()):
@@ -258,28 +277,25 @@ def chat(req: ChatRequest):
         context = "\n\n---\n\n".join(picked)
 
         prompt = f"""당신은 업로드된 PDF 문서를 기반으로 답하는 도우미입니다.
-            아래 [근거]에 있는 내용만 사용해서 답하세요.
-            근거에 없으면 "문서에서 확인되지 않습니다"라고 말하세요.
-            너는 한국어 문서를 읽고 한국어로 정확히 답변하는 AI다.
-            반드시 **UTF-8 인코딩의 한국어**로만 답변하라.
-            깨진 문자, 외국어, 기호를 사용하지 마라.
+                    아래 [근거]에 있는 내용만 사용해서 답하세요.
+                    근거에 없으면 "문서에서 확인되지 않습니다"라고 말하세요.
+                    그리고 한국어로만 답변 하세요.
 
-                [질문]
-                {req.question}
+                    [질문]
+                    {req.question}
 
-                [근거]
-                {context}
+                    [근거]
+                    {context}
 
-                [답변]
-                """
-
+                    [답변]
+                    """
         answer = ollama_generate(prompt).strip()
+        # 점수랑 한계점 비교 분석.
+        print(f"[ROUTER] best_score={best_score:.3f} question={req.question}")
         return ChatResponse(answer=answer, citations=citations)
 
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except requests.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
     

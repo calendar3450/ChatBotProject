@@ -39,4 +39,14 @@ public class PythonClientService {
         Map<String, Object> response = restTemplate.postForObject(url, req, Map.class);
         return response;
     }
+
+    //파이썬 chat post로 이동.
+    public Map<String, Object> chat(Long documentId, String question, Integer topK) {
+    String url = baseUrl + "/chat";
+
+    PythonChatRequest req = new PythonChatRequest(documentId, question, topK == null ? 5 : topK);
+
+    Map<String, Object> response = restTemplate.postForObject(url, req, java.util.Map.class);
+    return response;
+}   
 }

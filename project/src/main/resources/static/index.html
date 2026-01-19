@@ -67,6 +67,24 @@
 
 <pre id="documents-raw"></pre>
 
+<hr>
+
+<h2>4. 챗봇</h2>
+
+<label>
+  문서 ID:
+  <input type="number" id="chat-doc-id" placeholder="예: 261" required>
+</label>
+<br><br>
+
+<label>
+  질문:
+  <input type="text" id="chat-question" style="width: 600px;" placeholder="질문을 입력하세요" required>
+</label>
+
+<button id="chat-send-btn">보내기</button>
+
+<pre id="chat-result"></pre>
 
 <script>
     // 1) 문서 생성
@@ -206,6 +224,52 @@
         } catch (err) {
             docsRaw.textContent = '요청 실패: ' + err;
         }
+    });
+
+    // 챗봇 기능 구현
+    const chatDocIdInput = document.getElementById('chat-doc-id');
+    const chatQuestionInput = document.getElementById('chat-question');
+    const chatSendBtn = document.getElementById('chat-send-btn');
+    const chatResult = document.getElementById('chat-result');
+
+    chatSendBtn.addEventListener('click', async () => {
+    const documentId = Number(chatDocIdInput.value);
+    const question = chatQuestionInput.value.trim();
+
+    if (!documentId) {
+        alert("문서 ID를 입력해주세요.");
+        return;
+    }
+    if (!question) {
+        alert("질문을 입력해주세요.");
+        return;
+    }
+
+    chatResult.textContent = "답변 생성 중...";
+
+    try {
+        const res = await fetch('/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            documentId: documentId,
+            question: question,
+            topK: 5
+        })
+        });
+
+        if (!res.ok) {
+        const text = await res.text();
+        chatResult.textContent = '에러: ' + res.status + '\n' + text;
+        return;
+        }
+
+        const data = await res.json();
+        chatResult.textContent = JSON.stringify(data, null, 2);
+
+    } catch (err) {
+        chatResult.textContent = "요청 실패: " + err;
+    }
     });
 </script>
 
