@@ -25,7 +25,7 @@ DATA_DIR.mkdir(exist_ok=True)
 OLLAMA_BASE = "http://localhost:11434"
 OLLAMA_MODEL = "qwen2.5:7b"
 
-
+# 테스트용.
 class PingResponse(BaseModel):
     status: str
 
@@ -140,7 +140,6 @@ def chunk_pages(pages, chunk_chars,overlap):
 # 문제: 일반 임베딩 방식 사용 시, 질문과 문서의 형식이 달라 검색 정확도가 낮게 측정됨.
 # 해결: E5 모델의 Asymmetric Embedding 특성을 활용하여 query: 및 passage: Prefix 전략 도입.
 
-
 def embed_passages(texts):
     # e5는 passage prefix 권장
     inputs = [f"passage: {t}" for t in texts]
@@ -198,6 +197,8 @@ def ollama_generate(prompt: str) -> str:
     return (data.get("response") or "").strip()
 
 
+
+# 받고나서 파일읽고(extract_pdf_text) -> 텍스트 분할하고(chunk_pages) -> 벡터화(embed_passages) -> 저장(save_doc_store):.
 @app.post("/ingest", response_model=IngestResponse)
 def ingest(req: IngestRequest):
     try:

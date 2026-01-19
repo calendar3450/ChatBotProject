@@ -12,23 +12,22 @@ import org.springframework.beans.factory.annotation.Value;
 public class PythonClientService {
 
     private final RestTemplate restTemplate;
-    private final String baseurl;
+    private final String baseUrl;
 
     public PythonClientService(RestTemplate restTemplate,
                               @Value("${python.base-url}") String baseUrl) {
         this.restTemplate = restTemplate;
-        this.baseurl = baseUrl;
+        this.baseUrl = baseUrl;
         }
         
     public Map<String, Object> ping(){
-        String url = baseurl + "/ping";
-        
+        String url = baseUrl + "/ping";
         Map<String, Object> response = restTemplate.getForObject(url, Map.class);
         return response;
     }
 
     public Map<String, Object> ingestDocument(Document document) {
-        String url = baseurl + "/ingest";
+        String url = baseUrl + "/ingest";
 
         PythonIngestRequest req = new PythonIngestRequest(
                 document.getId(),
@@ -36,6 +35,7 @@ public class PythonClientService {
                 document.getTitle()
         );
 
+        // 이게 파이썬 서버로 보내는 코드. POST역할을 함. url = 목적지, req = 보낼 데이터
         Map<String, Object> response = restTemplate.postForObject(url, req, Map.class);
         return response;
     }
