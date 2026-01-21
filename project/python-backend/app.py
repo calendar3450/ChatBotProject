@@ -298,10 +298,3 @@ def chat(req: ChatRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
-    
-
-@app.post("/llm_test")
-def llm_test(prompt: str = Body(..., embed=True)):
-    out = ollama_chat_korean(prompt)
-    # ✅ charset 명시(클라이언트 오해 방지)
-    return JSONResponse(content={"out": out}, media_type="application/json; charset=utf-8")
