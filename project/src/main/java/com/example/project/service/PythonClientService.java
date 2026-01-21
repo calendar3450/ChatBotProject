@@ -35,7 +35,8 @@ public class PythonClientService {
                 document.getTitle()
         );
 
-        // 이게 파이썬 서버로 보내는 코드. POST역할을 함. url = 목적지, req = 보낼 데이터
+        // 이게 파이썬 서버로 보내거나 받는 코드. POST역할을 함. url = 목적지, req = 보낼 데이터
+        // 즉, 보낸후 응답을 줄때까지 기다리다가 받는 코드를 의미함. 
         Map<String, Object> response = restTemplate.postForObject(url, req, Map.class);
         return response;
     }
@@ -48,5 +49,5 @@ public class PythonClientService {
 
     Map<String, Object> response = restTemplate.postForObject(url, req, java.util.Map.class);
     return response;
-}   
+    }   
 }

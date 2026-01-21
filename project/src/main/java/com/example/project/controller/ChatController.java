@@ -3,7 +3,9 @@ package com.example.project.controller;
 import com.example.project.controller.dto.ChatRequest;
 import com.example.project.service.PythonClientService;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.Map;
 

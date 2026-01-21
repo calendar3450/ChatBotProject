@@ -73,6 +73,11 @@ public class DocumentService {
 
         return saved;
     
-}
+    }
+
+    public Document createAndUpload (String title, MultipartFile file) throws IOException {
+        Document d = create(title);
+        return uploadFile(d.getId(), file);
+    }
 
 }

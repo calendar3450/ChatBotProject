@@ -230,7 +230,7 @@ def ingest(req: IngestRequest):
 
 
 
-THRESHOLD = 0.80  # 처음엔 0.40로 두고, 필요하면 조정
+THRESHOLD = 0.80  # 처음엔 0.40로 두고, 필요하면 조정 RAG로 갈지 아니면 모델의 내용으로 갈지 확인.
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):

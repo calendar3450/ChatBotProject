@@ -41,20 +41,26 @@ public class DocumentController {
             .map(DocumentResponse::from)
             .toList();
     }
+    // legacy 코드
+    // @PostMapping("/documents")
+    // public DocumentResponse create(@Valid @RequestBody DocumentCreateRequest req) {
+    //     Document d = documentService.create(req.getTitle());
+    //     return DocumentResponse.from(d);
 
-    @PostMapping("/documents")
-    public DocumentResponse create(@Valid @RequestBody DocumentCreateRequest req) {
-        Document d = documentService.create(req.getTitle());
+    // }
+
+    // @PostMapping("/documents/{id}/upload")
+    // public DocumentResponse upload(@PathVariable("id") Long id, @RequestParam("file") MultipartFile file) throws IOException {
+
+    //     Document d = documentService.uploadFile(id, file);
+    //     return DocumentResponse.from(d);
+    // }
+
+    @PostMapping("/documents/upload")
+    public DocumentResponse uploadOneShot(@RequestParam("title") String title,
+                                        @RequestParam("file") MultipartFile file) throws IOException {
+        Document d = documentService.createAndUpload(title, file);
         return DocumentResponse.from(d);
-
     }
-
-    @PostMapping("/documents/{id}/upload")
-    public DocumentResponse upload(@PathVariable("id") Long id, @RequestParam("file") MultipartFile file) throws IOException {
-
-        Document d = documentService.uploadFile(id, file);
-        return DocumentResponse.from(d);
-    }
-    
     
 }
