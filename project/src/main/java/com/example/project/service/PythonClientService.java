@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import com.example.project.domain.Document;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -42,10 +43,10 @@ public class PythonClientService {
     }
 
     //파이썬 chat post로 이동.
-    public Map<String, Object> chat(Long documentId, String question, Integer topK) {
+    public Map<String, Object> chat(List<Long> documentIds, String question, Integer topK) {
     String url = baseUrl + "/chat";
 
-    PythonChatRequest req = new PythonChatRequest(documentId, question, topK == null ? 5 : topK);
+    PythonChatRequest req = new PythonChatRequest(documentIds, question, topK == null ? 5 : topK);
 
     Map<String, Object> response = restTemplate.postForObject(url, req, java.util.Map.class);
     return response;

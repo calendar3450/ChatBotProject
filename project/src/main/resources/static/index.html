@@ -18,15 +18,11 @@
     </label>
     <button type="submit">문서 생성</button>
 </form>
-
 <p>
     생성된 문서 ID: <span id="created-id">없음</span>
 </p>
-
 <pre id="create-result"></pre>
-
 <hr>
-
 2. 파일 업로드 폼 -->
 <!-- <h2>2. PDF 파일 업로드</h2>
 <form id="upload-form">
@@ -42,35 +38,24 @@
     <br><br>
     <button type="submit">파일 업로드</button>
 </form>
-
 <pre id="upload-result"></pre> -->
 
 
-<h2>1. PDF 업로드(원샷)</h2>
-<form id="oneshot-upload-form">
+<h2>1. 다중 PDF 업로드(원샷)</h2>
+
+<form id="multi-upload-form">
   <label>
-    제목:
-    <input type="text" id="oneshot-title" required>
+    PDF 파일들:
+    <input type="file" id="multi-files" accept="application/pdf" multiple required>
   </label>
   <br><br>
-
-  <label>
-    PDF 파일:
-    <input type="file" id="oneshot-file" accept="application/pdf" required>
-  </label>
-  <br><br>
-
-  <button type="submit">업로드 + 인덱싱</button>
+  <button type="submit">여러 문서 업로드 + 인덱싱</button>
 </form>
 
-<p>
-  업로드된 문서 ID: <span id="oneshot-doc-id">없음</span>
-</p>
+<pre id="multi-upload-result"></pre>
 
-<pre id="oneshot-result"></pre>
-
-<!-- 3. 문서 목록 조회 -->
-<h2>3. 문서 목록 조회</h2>
+<!-- 2. 문서 목록 조회 -->
+<h2>2. 문서 목록 조회</h2>
 <button id="load-documents-btn">문서 목록 불러오기</button>
 
 <table border="1" style="margin-top: 10px; border-collapse: collapse;">
@@ -92,19 +77,18 @@
 
 <hr>
 
-<h2>4. 챗봇</h2>
+<h2>3. 멀티 문서 챗봇</h2>
 
 <label>
-  문서 ID:
-  <input type="number" id="chat-doc-id" placeholder="예: 261" required>
+  문서 IDs (콤마로):
+  <input type="text" id="chat-doc-ids" placeholder="문서 확인하시고 id 보시고 입력 해주시기 바랍니다 예: 1,2" style="width: 400px;">
 </label>
 <br><br>
 
 <label>
   질문:
-  <input type="text" id="chat-question" style="width: 600px;" placeholder="질문을 입력하세요" required>
+  <input type="text" id="chat-question" style="width: 600px;" placeholder="질문을 입력하세요">
 </label>
-
 <button id="chat-send-btn">보내기</button>
 
 <pre id="chat-result"></pre>
@@ -197,60 +181,100 @@
     //     }
     // });
     
-const oneshotForm = document.getElementById('oneshot-upload-form');
-const oneshotTitle = document.getElementById('oneshot-title');
-const oneshotFile = document.getElementById('oneshot-file');
-const oneshotDocId = document.getElementById('oneshot-doc-id');
-const oneshotResult = document.getElementById('oneshot-result');
+// const oneshotForm = document.getElementById('oneshot-upload-form');
+// const oneshotTitle = document.getElementById('oneshot-title');
+// const oneshotFile = document.getElementById('oneshot-file');
+// const oneshotDocId = document.getElementById('oneshot-doc-id');
+// const oneshotResult = document.getElementById('oneshot-result');
 
-// (챗봇 섹션이 있다면) docId 자동 채우기
-const chatDocIdInput = document.getElementById('chat-doc-id');
+// // (챗봇 섹션이 있다면) docId 자동 채우기
+// const chatDocIdInput = document.getElementById('chat-doc-id');
 
-oneshotForm.addEventListener('submit', async (e) => {
+// oneshotForm.addEventListener('submit', async (e) => {
+//   e.preventDefault();
+
+//   const title = oneshotTitle.value.trim();
+//   const file = oneshotFile.files[0];
+
+//   if (!title) { alert("제목을 입력해주세요."); return; }
+//   if (!file) { alert("PDF 파일을 선택해주세요."); return; }
+
+//   oneshotResult.textContent = "업로드 중... (Python ingest까지 호출합니다)";
+
+//   const formData = new FormData();
+//   formData.append("title", title);
+//   formData.append("file", file);
+
+//   try {
+//     const res = await fetch("/documents/upload", {
+//       method: "POST",
+//       body: formData
+//     });
+
+//     if (!res.ok) {
+//       const text = await res.text();
+//       oneshotResult.textContent = "에러: " + res.status + "\n" + text;
+//       return;
+//     }
+
+//     const data = await res.json();
+//     oneshotResult.textContent = JSON.stringify(data, null, 2);
+
+//     oneshotDocId.textContent = data.id;
+
+//     // 챗봇 docId 자동 입력
+//     if (chatDocIdInput) {
+//       chatDocIdInput.value = data.id;
+//     }
+
+//   } catch (err) {
+//     oneshotResult.textContent = "요청 실패: " + err;
+//   }
+// });
+
+// 1) 문서 생성 pdf 문서 여러개 적용.
+const multiForm = document.getElementById('multi-upload-form');
+const multiFiles = document.getElementById('multi-files');
+const multiResult = document.getElementById('multi-upload-result');
+
+multiForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  const title = oneshotTitle.value.trim();
-  const file = oneshotFile.files[0];
-
-  if (!title) { alert("제목을 입력해주세요."); return; }
-  if (!file) { alert("PDF 파일을 선택해주세요."); return; }
-
-  oneshotResult.textContent = "업로드 중... (Python ingest까지 호출합니다)";
+  const files = multiFiles.files;
+  if (!files || files.length === 0) {
+    alert("PDF 파일을 선택해주세요.");
+    return;
+  }
 
   const formData = new FormData();
-  formData.append("title", title);
-  formData.append("file", file);
+  for (const f of files) {
+    formData.append("files", f); // 같은 key로 여러 번 append하면 List로 받습니다
+  }
+
+  multiResult.textContent = "업로드/인덱싱 중...";
 
   try {
-    const res = await fetch("/documents/upload", {
+    const res = await fetch("/documents/uploads", {
       method: "POST",
       body: formData
     });
 
     if (!res.ok) {
       const text = await res.text();
-      oneshotResult.textContent = "에러: " + res.status + "\n" + text;
+      multiResult.textContent = "에러: " + res.status + "\n" + text;
       return;
     }
 
-    const data = await res.json();
-    oneshotResult.textContent = JSON.stringify(data, null, 2);
-
-    oneshotDocId.textContent = data.id;
-
-    // 챗봇 docId 자동 입력
-    if (chatDocIdInput) {
-      chatDocIdInput.value = data.id;
-    }
+    const data = await res.json(); // List<DocumentResponse>
+    multiResult.textContent = "업로드가 완료되었습니다.\n"
 
   } catch (err) {
-    oneshotResult.textContent = "요청 실패: " + err;
+    multiResult.textContent = "요청 실패: " + err;
   }
+  
 });
 
-    
-
-     // 3) 문서 목록 조회
+     // 2) 문서 목록 조회
     const loadBtn = document.getElementById('load-documents-btn');
     const docsTbody = document.getElementById('documents-tbody');
     const docsRaw = document.getElementById('documents-raw');
@@ -266,7 +290,6 @@ oneshotForm.addEventListener('submit', async (e) => {
             }
 
             const data = await res.json();
-            docsRaw.textContent = JSON.stringify(data, null, 2);
 
             // 테이블 비우고 다시 채우기
             docsTbody.innerHTML = '';
@@ -303,53 +326,47 @@ oneshotForm.addEventListener('submit', async (e) => {
         }
     });
 
-    // 챗봇 기능 구현
-    // const chatDocIdInput = document.getElementById('chat-doc-id');
-    const chatQuestionInput = document.getElementById('chat-question');
-    const chatSendBtn = document.getElementById('chat-send-btn');
-    const chatResult = document.getElementById('chat-result');
+//3. 챗봇 기능 구현
+const chatDocIdsInput = document.getElementById('chat-doc-ids');
+const chatQuestionInput = document.getElementById('chat-question');
+const chatSendBtn = document.getElementById('chat-send-btn');
+const chatResult = document.getElementById('chat-result');
 
-    chatSendBtn.addEventListener('click', async () => {
-    const documentId = Number(chatDocIdInput.value);
-    const question = chatQuestionInput.value.trim();
+chatSendBtn.addEventListener('click', async () => {
+  const raw = chatDocIdsInput.value.trim();
+  const question = chatQuestionInput.value.trim();
 
-    if (!documentId) {
-        alert("문서 ID를 입력해주세요.");
-        return;
-    }
-    if (!question) {
-        alert("질문을 입력해주세요.");
-        return;
-    }
+  if (!raw) { alert("문서 ID를 입력해주세요."); return; }
+  if (!question) { alert("질문을 입력해주세요."); return; }
 
-    chatResult.textContent = "답변 생성 중...";
+  const documentIds = raw.split(',')
+    .map(s => Number(s.trim()))
+    .filter(n => Number.isFinite(n) && n > 0);
 
-    try {
-        const res = await fetch('/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            documentId: documentId,
-            question: question,
-            topK: 5
-        })
-        });
+  if (documentIds.length === 0) {
+    alert("문서 ID 형식이 잘못됐습니다. 예: 261,262");
+    return;
+  }
 
-        if (!res.ok) {
-        const text = await res.text();
-        chatResult.textContent = '에러: ' + res.status + '\n' + text;
-        return;
-        }
+  chatResult.textContent = "답변 생성 중...";
 
-        const data = await res.json();
-        chatResult.textContent = JSON.stringify(data, null, 2);
+  const res = await fetch('/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      documentIds,
+      question,
+      topK: 5
+    })
+  });
 
-    } catch (err) {
-        chatResult.textContent = "요청 실패: " + err;
-    }
-    });
+  if (!res.ok) {
+    chatResult.textContent = '에러: ' + res.status + '\n' + await res.text();
+    return;
+  }
 
-
+  chatResult.textContent = JSON.stringify(await res.json(), null, 2);
+});
     
 </script>
 

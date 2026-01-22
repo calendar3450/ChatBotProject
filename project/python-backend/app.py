@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
 
 class IngestRequest(BaseModel):
-    document_id: int
+    document_id: list[int]
     file_path: str
     title: str | None = None
 
@@ -53,7 +53,8 @@ class IngestResponse(BaseModel):
 class ChatRequest(BaseModel):
     document_id: int
     question: str
-    top_k : int = 5
+    top_k : int = 3
+    per_doc : int = 3
 
 class ChatResponse(BaseModel):
     answer: str
@@ -65,7 +66,7 @@ def ollama_chat_korean(user_text: str) -> str:
     url = f"{OLLAMA_BASE}/api/chat"
     payload = {
         "model": OLLAMA_MODEL,
-        "stream": False,
+        "stream": True,
         "options": {"temperature": 0.2},
         "messages": [
             {"role": "system", "content": "당신은 한국어로만 답합니다. 중국어/영어를 절대 사용하지 마세요. 출력은 자연스러운 한국어 문장으로만 작성하세요."},
@@ -161,6 +162,7 @@ def save_doc_store(doc_id, chunks, vectors):
     (doc_dir / "chunks.json").write_text(json.dumps(chunks, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # faiss 인덱스 저장 (cosine 유사도 = normalize + inner product)
+    # faiss는 키워드와 의미의 거리를 검색하는것.
     dim = vectors.shape[1]
     index = faiss.IndexFlatIP(dim)
     index.add(vectors)
@@ -235,63 +237,72 @@ THRESHOLD = 0.80  # 처음엔 0.40로 두고, 필요하면 조정 RAG로 갈지 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     try:
-        chunks, index = load_doc_store(req.document_id)
+        if not req.document_ids:
+            raise HTTPException(status_code=400, detail="document_ids is empty")
+
         qv = embed_query(req.question)
-
+        # 문서중 질문과 가장 비슷한 내용 상위 k
         top_k = max(1, min(req.top_k, 10))
-        scores, ids = index.search(qv, top_k)
 
-        best_score = float(scores[0][0]) if top_k > 0 else -1.0
+        # 1) 각 문서별 검색 결과 수집
+        merged = []  # (score, doc_id, chunk_index, chunk_obj)
+        for doc_id in req.document_ids:
+            chunks, index = load_doc_store(doc_id)
+            scores, ids = index.search(qv, top_k)
 
-        # 1) 문서 관련성이 낮으면: 일반 지식 모드
-        if best_score < THRESHOLD:
-            prompt = f"""당신은 유용한 한국어 어시스턴트입니다.
-                        사용자의 질문에 일반 상식/지식으로 친절하고 정확하게 답하세요.
-                        모르면 모른다고 말하세요.
-                        그리고 한국어로만 답변 하세요.
+            for rank, idx in enumerate(ids[0].tolist()):
+                if idx < 0:
+                    continue
+                merged.append((
+                    float(scores[0][rank]),
+                    doc_id,
+                    idx,
+                    chunks[idx]
+                ))
 
-                        [질문]
-                        {req.question}
-
-                        [답변]
-                        """
+        if not merged:
+            # 문서들에서 아무 것도 못 찾음 -> 일반모드/또는 "확인 불가"
+            prompt = f"""사용자의 질문에 일반 지식으로 답하세요. 모르면 모른다고 하세요.
+[질문]
+{req.question}
+[답변]
+"""
             answer = ollama_generate(prompt).strip()
             return ChatResponse(answer=answer, citations=[])
 
-        # 2) 문서 관련성이 충분하면: 문서 근거 모드 (RAG)
-        picked = []
+        # 2) 전역 top_k 선택
+        merged.sort(key=lambda x: x[0], reverse=True)
+        picked = merged[:top_k]
+
+        # 3) 컨텍스트 + citations 구성
+        context_parts = []
         citations = []
-        for rank, idx in enumerate(ids[0].tolist()):
-            if idx < 0:
-                continue
-            c = chunks[idx]
-            picked.append(c["text"])
+        for r, (score, doc_id, chunk_idx, chunk) in enumerate(picked, start=1):
+            context_parts.append(chunk["text"])
             citations.append({
-                "rank": rank + 1,
-                "score": float(scores[0][rank]),
-                "page_from": c.get("page_from"),
-                "page_to": c.get("page_to"),
-                "chunk_index": idx
+                "rank": r,
+                "score": score,
+                "document_id": doc_id,
+                "page_from": chunk.get("page_from"),
+                "page_to": chunk.get("page_to"),
+                "chunk_index": chunk_idx
             })
 
-        context = "\n\n---\n\n".join(picked)
+        context = "\n\n---\n\n".join(context_parts)
 
-        prompt = f"""당신은 업로드된 PDF 문서를 기반으로 답하는 도우미입니다.
-                    아래 [근거]에 있는 내용만 사용해서 답하세요.
-                    근거에 없으면 "문서에서 확인되지 않습니다"라고 말하세요.
-                    그리고 한국어로만 답변 하세요.
+        prompt = f"""당신은 여러 PDF 문서를 근거로 답하는 도우미입니다.
+아래 [근거]에 있는 내용만 사용해서 답하세요.
+근거에 없으면 "문서에서 확인되지 않습니다"라고 말하세요.
 
-                    [질문]
-                    {req.question}
+[질문]
+{req.question}
 
-                    [근거]
-                    {context}
+[근거]
+{context}
 
-                    [답변]
-                    """
+[답변]
+"""
         answer = ollama_generate(prompt).strip()
-        # 점수랑 한계점 비교 분석.
-        print(f"[ROUTER] best_score={best_score:.3f} question={req.question}")
         return ChatResponse(answer=answer, citations=citations)
 
     except FileNotFoundError as e:

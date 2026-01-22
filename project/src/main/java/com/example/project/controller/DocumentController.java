@@ -1,6 +1,7 @@
 package com.example.project.controller;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,16 +9,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.example.project.controller.dto.DocumentCreateRequest;
 import com.example.project.controller.dto.DocumentResponse;
 import com.example.project.domain.Document;
 import com.example.project.repository.DocumentRepository;
 import com.example.project.service.DocumentService;
 
-import jakarta.validation.Valid;
 
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 
@@ -56,11 +54,29 @@ public class DocumentController {
     //     return DocumentResponse.from(d);
     // }
 
-    @PostMapping("/documents/upload")
-    public DocumentResponse uploadOneShot(@RequestParam("title") String title,
-                                        @RequestParam("file") MultipartFile file) throws IOException {
-        Document d = documentService.createAndUpload(title, file);
-        return DocumentResponse.from(d);
+    // @PostMapping("/documents/upload")
+    // public DocumentResponse uploadOneShot(@RequestParam("title") String title,
+    //                                     @RequestParam("file") MultipartFile file) throws IOException {
+    //     Document d = documentService.createAndUpload(title, file);
+    //     return DocumentResponse.from(d);
+    // }
+
+    @PostMapping("/documents/uploads")
+    public List<DocumentResponse> uploadMany (@RequestParam("files") List<MultipartFile> files) throws IOException{
+        if (files == null || files.isEmpty()) {
+            throw new IllegalArgumentException("파일이 없습니다.");
+        
+        }
+        List<DocumentResponse> results = new ArrayList<>();
+        for (MultipartFile f : files) {
+            String original = (f.getOriginalFilename() == null) ? "untitled.pdf" : f.getOriginalFilename();
+            String title = original;
+            Document d = documentService.createAndUpload(title, f);
+            results.add(DocumentResponse.from(d));
+        }
+
+        return results;
     }
+    
     
 }
