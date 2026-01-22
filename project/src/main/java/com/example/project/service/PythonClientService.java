@@ -31,7 +31,7 @@ public class PythonClientService {
         String url = baseUrl + "/ingest";
 
         PythonIngestRequest req = new PythonIngestRequest(
-                document.getId(),
+                List.of(document.getId()),
                 document.getFilePath(),
                 document.getTitle()
         );
@@ -46,7 +46,14 @@ public class PythonClientService {
     public Map<String, Object> chat(List<Long> documentIds, String question, Integer topK) {
     String url = baseUrl + "/chat";
 
-    PythonChatRequest req = new PythonChatRequest(documentIds, question, topK == null ? 5 : topK);
+    // 파이썬 서버가 document_id를 단일 int로 요구합니다.
+    // 리스트에 0이 포함되어 있거나(전체/일반), 리스트가 비어있으면 0으로 설정합니다.
+    // 그 외의 경우 첫 번째 문서 ID를 사용합니다.
+    Long documentId = (documentIds == null || documentIds.isEmpty() || documentIds.contains(0L)) 
+            ? 0L 
+            : documentIds.get(0);
+
+    PythonChatRequest req = new PythonChatRequest(documentId, question, topK == null ? 5 : topK);
 
     Map<String, Object> response = restTemplate.postForObject(url, req, java.util.Map.class);
     return response;

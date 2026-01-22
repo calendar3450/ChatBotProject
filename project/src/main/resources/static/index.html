@@ -343,7 +343,7 @@ chatSendBtn.addEventListener('click', async () => {
     .map(s => Number(s.trim()))
     .filter(n => Number.isFinite(n) && n > 0);
 
-  if (documentIds.length === 0) {
+  if (documentIds.length === 0 && documentIds != 0) {
     alert("문서 ID 형식이 잘못됐습니다. 예: 261,262");
     return;
   }

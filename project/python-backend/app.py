@@ -69,7 +69,7 @@ def ollama_chat_korean(user_text: str) -> str:
         "stream": True,
         "options": {"temperature": 0.2},
         "messages": [
-            {"role": "system", "content": "당신은 한국어로만 답합니다. 중국어/영어를 절대 사용하지 마세요. 출력은 자연스러운 한국어 문장으로만 작성하세요."},
+            {"role": "system", "content": "당신은 한국어로만 답합니다. 중국어 또는 영어를 절대 사용하지 마세요. 출력은 자연스러운 한국어 문장으로만 작성하세요."},
             {"role": "user", "content": user_text}
         ]
     }
@@ -214,10 +214,11 @@ def ingest(req: IngestRequest):
         texts = [c["text"] for c in chunks]
         vecs = embed_passages(texts)
 
-        save_doc_store(req.document_id, chunks, vecs)
+        for doc_id in req.document_id:
+            save_doc_store(doc_id, chunks, vecs)
 
         return IngestResponse(
-            document_id=req.document_id,
+            document_id=req.document_id[0],
             received=True,
             extracted_chars=total_chars,
             page_count=len(pages),
@@ -232,78 +233,90 @@ def ingest(req: IngestRequest):
 
 
 
-THRESHOLD = 0.80  # 처음엔 0.40로 두고, 필요하면 조정 RAG로 갈지 아니면 모델의 내용으로 갈지 확인.
+THRESHOLD = 0.40  # 처음엔 0.40로 두고, 필요하면 조정 RAG로 갈지 아니면 모델의 내용으로 갈지 확인.
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     try:
-        if not req.document_ids:
-            raise HTTPException(status_code=400, detail="document_ids is empty")
-
-        qv = embed_query(req.question)
-        # 문서중 질문과 가장 비슷한 내용 상위 k
-        top_k = max(1, min(req.top_k, 10))
-
-        # 1) 각 문서별 검색 결과 수집
-        merged = []  # (score, doc_id, chunk_index, chunk_obj)
-        for doc_id in req.document_ids:
-            chunks, index = load_doc_store(doc_id)
-            scores, ids = index.search(qv, top_k)
-
-            for rank, idx in enumerate(ids[0].tolist()):
-                if idx < 0:
-                    continue
-                merged.append((
-                    float(scores[0][rank]),
-                    doc_id,
-                    idx,
-                    chunks[idx]
-                ))
-
-        if not merged:
+        # 모델에 정의된 단일 document_id를 리스트로 감싸서 처리
+        if req.document_id == 0:
             # 문서들에서 아무 것도 못 찾음 -> 일반모드/또는 "확인 불가"
-            prompt = f"""사용자의 질문에 일반 지식으로 답하세요. 모르면 모른다고 하세요.
-[질문]
-{req.question}
-[답변]
-"""
-            answer = ollama_generate(prompt).strip()
-            return ChatResponse(answer=answer, citations=[])
+                prompt = f"""사용자의 질문에 일반 지식으로 답하세요.
+                [질문]
+                {req.question}
+                [답변]
+                """
+                answer = ollama_generate(prompt).strip()
+                return ChatResponse(answer=answer,citations=[])
+        else:
+            target_ids = [req.document_id]
 
-        # 2) 전역 top_k 선택
-        merged.sort(key=lambda x: x[0], reverse=True)
-        picked = merged[:top_k]
+            qv = embed_query(req.question)
+            # 문서중 질문과 가장 비슷한 내용 상위 k
+            top_k = max(1, min(req.top_k, 10))
 
-        # 3) 컨텍스트 + citations 구성
-        context_parts = []
-        citations = []
-        for r, (score, doc_id, chunk_idx, chunk) in enumerate(picked, start=1):
-            context_parts.append(chunk["text"])
-            citations.append({
-                "rank": r,
-                "score": score,
-                "document_id": doc_id,
-                "page_from": chunk.get("page_from"),
-                "page_to": chunk.get("page_to"),
-                "chunk_index": chunk_idx
-            })
+            # 1) 각 문서별 검색 결과 수집
+            merged = []  # (score, doc_id, chunk_index, chunk_obj)
+            for doc_id in target_ids:
+                chunks, index = load_doc_store(doc_id)
+                scores, ids = index.search(qv, top_k)
 
-        context = "\n\n---\n\n".join(context_parts)
+                for rank, idx in enumerate(ids[0].tolist()):
+                    if idx < 0:
+                        continue
+                    merged.append((
+                        float(scores[0][rank]),
+                        doc_id,
+                        idx,
+                        chunks[idx]
+                    ))
+                
+            # 2) 전역 top_k 선택
+            merged.sort(key=lambda x: x[0], reverse=True)
+            picked = merged[:top_k]
 
-        prompt = f"""당신은 여러 PDF 문서를 근거로 답하는 도우미입니다.
-아래 [근거]에 있는 내용만 사용해서 답하세요.
-근거에 없으면 "문서에서 확인되지 않습니다"라고 말하세요.
+            # 3) 컨텍스트 + citations 구성
+            context_parts = []
+            citations = []
+            for r, (score, doc_id, chunk_idx, chunk) in enumerate(picked, start=1):
+                context_parts.append(chunk["text"])
+                citations.append({
+                    "rank": r,
+                    "score": score,
+                    "document_id": doc_id,
+                    "page_from": chunk.get("page_from"),
+                    "page_to": chunk.get("page_to"),
+                    "chunk_index": chunk_idx
+                })
 
-[질문]
-{req.question}
+            context = "\n\n---\n\n".join(context_parts)
 
-[근거]
-{context}
+            prompt = f"""당신은 업로드된 PDF 문서를 읽고 분석하는 어시스턴트입니다.
 
-[답변]
-"""
-        answer = ollama_generate(prompt).strip()
-        return ChatResponse(answer=answer, citations=citations)
+                        규칙:
+                        1) 먼저 [근거]에서 질문과 관련된 핵심 포인트를 추려 요약하세요.
+                        2) 그 근거를 바탕으로 합리적인 추론/시나리오를 제시할 수 있습니다.
+                        3) 문서에 없는 사실(예: 최신 주가, 향후 확정 수치)은 만들어내지 마세요.
+                        4) 불확실한 내용은 "가능성", "시나리오"로 표현하고 가정과 한계를 명시하세요.
+                        5) 답변 마지막에 "추가로 있으면 좋은 데이터" 3가지를 제안하세요.
+
+                        [질문]
+                        {req.question}
+
+                        [근거]
+                        {context}
+
+                        [출력 형식]
+                        - 근거 요약(3~5줄):
+                        - 시나리오(상/중/하) + 근거 연결:
+                        - 리스크/반례:
+                        - 한계(문서에 없는 정보):
+                        - 추가로 있으면 좋은 데이터(3개):
+
+                            [답변]
+                            """
+            answer = ollama_generate(prompt)
+            return ChatResponse(answer=answer,citations=citations)
 
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
