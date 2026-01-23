@@ -355,8 +355,7 @@ chatSendBtn.addEventListener('click', async () => {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       documentIds,
-      question,
-      topK: 5
+      question
     })
   });
 

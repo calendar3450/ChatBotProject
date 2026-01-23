@@ -23,7 +23,7 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 OLLAMA_BASE = "http://localhost:11434"
-OLLAMA_MODEL = "qwen2.5:7b"
+OLLAMA_MODEL = "qwen3-vl:8b"
 
 # 테스트용.
 class PingResponse(BaseModel):
@@ -241,13 +241,17 @@ def chat(req: ChatRequest):
         # 모델에 정의된 단일 document_id를 리스트로 감싸서 처리
         if req.document_id == 0:
             # 문서들에서 아무 것도 못 찾음 -> 일반모드/또는 "확인 불가"
-                prompt = f"""사용자의 질문에 일반 지식으로 답하세요.
-                [질문]
-                {req.question}
-                [답변]
-                """
-                answer = ollama_generate(prompt).strip()
-                return ChatResponse(answer=answer,citations=[])
+            print(1)
+            prompt = f""" 당신은 유용한 한국어 어시스턴트입니다.
+                반드시 한국어로만 답변하세요. 중국어 언어는 절대 사용하지 마세요.
+                사용자의 질문에 정확하고 간결하게 답하세요. 모르면 모른다고 하세요.
+                            
+            [질문]
+            {req.question}
+            [답변]
+            """
+            answer = ollama_generate(prompt).strip()
+            return ChatResponse(answer=answer,citations=[])
         else:
             target_ids = [req.document_id]
 
@@ -294,6 +298,7 @@ def chat(req: ChatRequest):
             prompt = f"""당신은 업로드된 PDF 문서를 읽고 분석하는 어시스턴트입니다.
 
                         규칙:
+                        0) 무조건 대답은 한글로만 작성하세요. 중국어 영어 사용하지 마세요.
                         1) 먼저 [근거]에서 질문과 관련된 핵심 포인트를 추려 요약하세요.
                         2) 그 근거를 바탕으로 합리적인 추론/시나리오를 제시할 수 있습니다.
                         3) 문서에 없는 사실(예: 최신 주가, 향후 확정 수치)은 만들어내지 마세요.
@@ -321,4 +326,6 @@ def chat(req: ChatRequest):
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import traceback
+        traceback.print_exc() # 서버 콘솔에 상세 에러 로그 출력
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
