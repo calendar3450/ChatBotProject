@@ -59,16 +59,20 @@ public class DocumentService {
         
         //DB 업데이트
         d.setFilePath(target.toString());
-        d.setStatus(DocumentStatus.UPLOADED);
-        d.setCreatedAt(LocalDateTime.now());
+        d.setStatus(DocumentStatus.PROCESSING);
+        d = documentRepository.save(d);
         Document saved = documentRepository.save(d);
 
         try {
             var resp = pythonClientService.ingestDocument(saved);
-            System.out.println("✅ Python ingest 응답: " + resp);
+            System.out.println(" Python ingest 응답: " + resp);
+            d.setStatus(DocumentStatus.DONE);
+            d = documentRepository.save(d);
         } catch (Exception e) {
             // 파이썬 서버가 꺼져 있어도 업로드 자체는 실패시키고 싶지 않다면, 여기서만 로그 찍고 무시
-            System.err.println("⚠ Python ingest 호출 실패: " + e.getMessage());
+            System.err.println("Python ingest 호출 실패: " + e.getMessage());
+            d.setStatus(DocumentStatus.FAILED);
+            d = documentRepository.save(d);
         }
 
         return saved;

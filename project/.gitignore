@@ -5,6 +5,7 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 uploads/
+data/
 
 ### STS ###
 .apt_generated

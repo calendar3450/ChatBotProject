@@ -18,8 +18,8 @@ public class DocumentResponse {
         r.id = d.getId();
         r.title = d.getTitle();
         r.filePath = d.getFilePath();
-        r.status = d.getStatus();
-        r.createAt = d.getCreatedAt();
+        r.status = d.getStatus() == null ? null : d.getStatus();
+        r.createAt = d.getCreatedAt() == null ? null : d.getCreatedAt();
         return r;
     }
     
