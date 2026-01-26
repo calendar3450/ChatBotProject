@@ -195,6 +195,29 @@ function onPickFiles(e) {
   e.target.value = ''
 }
 
+async function reingestDoc(id) {
+  try {
+    const res = await fetch(`/documents/${id}/reingest`, { method: 'POST' })
+    if (!res.ok) {
+      alert(`재시도 실패: ${res.status}\n${await res.text()}`)
+      return
+    }
+    await loadDocuments()
+  } catch (e) {
+    alert(`재시도 요청 실패: ${String(e)}`)
+  }
+}
+
+// 상태별 텍스트
+function statusLabel(s) {
+  if (s === 'DONE') return '완료'
+  if (s === 'PROCESSING') return '인덱싱 중'
+  if (s === 'FAILED') return '실패'
+  if (s === 'UPLOADED') return '업로드됨'
+  return s || ''
+}
+
+
 </script>
 
 <template>
@@ -258,8 +281,20 @@ function onPickFiles(e) {
             </div>
             <div class="doc-sub">
               #{{ d.id }}
-              <span v-if="d.status">· {{ d.status }}</span>
+              <span v-if="d.status" class="badge" :class="'st-' + d.status">
+                {{ statusLabel(d.status) }}
+              </span>
               <span v-if="d.createdAt">· {{ d.createdAt }}</span>
+            </div>
+            <div class="doc-actions">
+            <button
+              v-if="d.status === 'FAILED'"
+              class="retry"
+              @click.prevent="reingestDoc(d.id)"
+              title="다시 인덱싱"
+            >
+              재시도
+            </button>
             </div>
           </div>
         </label>
@@ -371,4 +406,30 @@ function onPickFiles(e) {
 }
 .upload-btn:hover { background: #1a1a20; }
 .file-input { display: none; }
+
+
+.badge {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid #2a2a31;
+  background: #141418;
+  opacity: 0.95;
+}
+
+.st-DONE { border-color: #245; }
+.st-PROCESSING { border-color: #554400; }
+.st-FAILED { border-color: #552222; }
+
+.doc-actions { margin-top: 6px; }
+.retry {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #2a2a31;
+  background: #1f1f26;
+  color: #fff;
+  cursor: pointer;
+}
+.retry:hover { background: #272730; }
 </style>

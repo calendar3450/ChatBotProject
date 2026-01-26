@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -74,6 +75,11 @@ public class DocumentController {
         }
 
         return results;
+    }
+    
+    @PostMapping("/documents/{id}/reingest")
+    public DocumentResponse reingest(@PathVariable("id") Long id) {
+        return DocumentResponse.from(documentService.reingest(id));
     }
     
     

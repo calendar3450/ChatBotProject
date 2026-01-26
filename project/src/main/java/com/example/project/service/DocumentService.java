@@ -83,4 +83,26 @@ public class DocumentService {
         return uploadFile(d.getId(), file);
     }
 
+    public Document reingest(Long documentId) {
+    Document d = documentRepository.findById(documentId)
+            .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+
+    if (d.getFilePath() == null || d.getFilePath().isBlank()) {
+        throw new IllegalStateException("No filePath for document: " + documentId);
+    }
+
+    // 상태를 PROCESSING으로
+    d.setStatus(DocumentStatus.PROCESSING);
+    d = documentRepository.save(d);
+
+    try {
+        pythonClientService.ingestDocument(d);
+        d.setStatus(DocumentStatus.DONE);
+    } catch (Exception e) {
+        d.setStatus(DocumentStatus.FAILED);
+    }
+
+    return documentRepository.save(d);
+}
+
 }

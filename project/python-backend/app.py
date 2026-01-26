@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from pypdf import PdfReader
+import pdfplumber
 from pathlib import Path
 import uvicorn
 from sentence_transformers import SentenceTransformer
@@ -8,6 +8,7 @@ import numpy as np
 import faiss
 import json
 import requests
+import traceback
 from fastapi import Body
 from fastapi.responses import JSONResponse
 
@@ -88,13 +89,13 @@ def extract_pdf_text(file_path: str):
     if not p.exists():
         raise FileNotFoundError(f"File not found: {p}")
     
-    reader = PdfReader(str(p))
-    
     pages = []
-    for i, page in enumerate(reader.pages):
-        text = page.extract_text() or ""
-        pages.append({"page": i + 1, "text": text})
-
+    with pdfplumber.open(str(p)) as pdf:
+        for i, page in enumerate(pdf.pages):
+            # pdfplumber는 pypdf보다 'bbox' 관련 에러에 훨씬 강합니다.
+            text = page.extract_text() or ""
+            pages.append({"page": i + 1, "text": text})
+            
     return pages
 
 def chunk_pages(pages, chunk_chars,overlap):
@@ -228,6 +229,7 @@ def ingest(req: IngestRequest):
     except HTTPException:
         raise
     except Exception as e:
+        traceback.print_exc() # 서버 콘솔에 상세 에러 로그 출력
         raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
 
 
@@ -303,8 +305,7 @@ def chat(req: ChatRequest):
                         2) '부족'이면 문서에 없는 정보를 억지로 연결하지 말고, 아래 '부족할 때 출력' 형식으로만 답하세요.
                         3) '적절'할 경우, [근거]의 내용을 핵심 동인(Driver)으로 삼아 모델의 일반적인 산업 지식을 결합해 시나리오를 작성하세요. 단, 문서의 내용과 모델의 추론을 "문서에 따르면~", "산업 특성상 ~할 것으로 보이며"와 같이 명확히 구분하세요.
                         4) 문서에 없는 사실(예: 최신 주가, 미래 확정 수치)은 만들지 마세요.
-                        5) 불확실한 내용은 "가능성/시나리오"로 표현하고 가정과 한계를 명시하세요.
-                        6) 마지막에 "추가로 있으면 좋은 데이터" 3가지를 제안하세요.
+                        5) 마지막에 "추가로 있으면 좋은 데이터" 3가지를 제안하세요.
 
                         [질문]
                         {req.question}
@@ -313,19 +314,10 @@ def chat(req: ChatRequest):
                         {context}
 
                         [출력 형식 - 충분/부분일 때]
-                        - 판정: 충분/부분
+                        - 결론:
                         - 근거 요약(3~5줄):
-                        - 시나리오(상/중/하) + 근거 연결:
-                        - 리스크/반례:
-                        - 한계(문서에 없는 정보):
                         - 추가로 있으면 좋은 데이터(3개):
 
-                        [출력 형식 - 부족일 때]
-                        - 판정: 부족
-                        - 문서에서 확인 가능한 것(있다면 1~3줄, 없으면 '없음'):
-                        - 왜 답할 수 없는지(문서 근거 부족 사유):
-                        - 대신 제공 가능한 것: (일반적인 접근/분석 방법/필요 데이터 안내 중 가능한 범위)
-                        - 추가로 있으면 좋은 데이터(3개):
 
                         [답변]
                         """
