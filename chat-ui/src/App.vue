@@ -33,13 +33,15 @@ const loadingDocs = ref(false)
 const docError = ref('')
 const chatRef = ref(null)
 
+//값을 자동으로 갱신하여 set집합에 데이터를 보냄.
 const selectedDocIds = computed(() => Array.from(selected.value))
 
+// 답변이 오면 스크롤이 내려감.
 async function scrollToBottom() {
-  await nextTick()
-  const el = chatRef.value
-  if (!el) return
-  el.scrollTop = el.scrollHeight
+  await nextTick() //Promise 체이닝 기법
+  const curScroll = chatRef.value
+  if (!curScroll) return
+  curScroll.scrollTop = curScroll.scrollHeight
 }
 
 /** 문서 목록 로딩 */
@@ -138,10 +140,10 @@ async function send() {
 }
 
 /** citations score 표시 */
-function fmtScore(s) {
-  if (typeof s !== 'number') return String(s ?? '')
-  return s.toFixed(3)
-}
+// function fmtScore(s) {
+//   if (typeof s !== 'number') return String(s ?? '')
+//   return s.toFixed(3)
+// }
 
 onMounted(() => {
   loadDocuments()
@@ -281,8 +283,8 @@ function onPickFiles(e) {
               <ul>
                 <li v-for="c in m.citations" :key="c.rank">
                   문서 {{ c.document_id ?? '?' }},
-                  p.{{ c.page_from }}~{{ c.page_to }},
-                  score={{ fmtScore(c.score) }}
+                  p.{{ c.page_from }}~{{ c.page_to }}
+                  <!-- score={{ fmtScore(c.score) }} -->
                 </li>
               </ul>
             </details>
