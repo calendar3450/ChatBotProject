@@ -1,6 +1,6 @@
-<script setup>
 
-// const message = ref('안녕하세요')
+
+<!-- // const message = ref('안녕하세요')
 // const button_message = ref('클릭')
 
 // function changeMessage() {
@@ -13,12 +13,13 @@
 //     button_message.value = '클릭!'
 //   }
 // }
-import { ref, onMounted, computed, nextTick } from 'vue'
-
 /**
  * documents: Spring GET /documents 결과를 저장
  * selected: 체크된 문서 id Set
- */
+ */ -->
+
+<script setup>
+import { ref, onMounted, computed, nextTick } from 'vue'
 
 const documents = ref([])
 const selected = ref(new Set())
@@ -89,64 +90,115 @@ function clearSelection() {
 function onKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
-    send()
+    sendStream()
   }
 }
 
-/** 채팅 전송 */
-async function send() {
+// /** 채팅 전송 */
+// async function send() {
+//   const q = input.value.trim()
+//   if (!q || sending.value) return
+
+//   // 1) 사용자 메시지
+//   messages.value.push({ role: 'user', text: q })
+//   input.value = ''
+
+//   // 2) 로딩 말풍선
+//   const botMsg = { role: 'assistant', text: '답변 생성 중...', loading: true, citations: [] }
+//   messages.value.push(botMsg)
+
+//   sending.value = true
+//   await scrollToBottom()
+
+//   try {
+//     const res = await fetch('/chat', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify({
+//         documentIds: selectedDocIds.value.length > 0 ? selectedDocIds.value : [0],
+//         question: q,
+//         topK: 5,
+//       }),
+//     })
+
+//     if (!res.ok) {
+//       botMsg.text = `에러: ${res.status}\n${await res.text()}`
+//       botMsg.loading = false
+//       return
+//     }
+
+//     const data = await res.json()
+//     botMsg.text = data.answer ?? '(answer 없음)'
+//     botMsg.citations = data.citations ?? []
+//     botMsg.loading = false
+//   } catch (e) {
+//     botMsg.text = `요청 실패: ${String(e)}`
+//     botMsg.loading = false
+//   } finally {
+//     sending.value = false
+//     await scrollToBottom()
+//   }
+// }
+
+// send()를 stream기능을 넣어서 바꿈.
+let es = null
+async function sendStream() {
   const q = input.value.trim()
   if (!q || sending.value) return
 
-  // 1) 사용자 메시지
   messages.value.push({ role: 'user', text: q })
   input.value = ''
 
-  // 2) 로딩 말풍선
-  const botMsg = { role: 'assistant', text: '답변 생성 중...', loading: true, citations: [] }
+  const botMsg = { role: 'assistant', text: '', loading: true, citations: [] }
   messages.value.push(botMsg)
-
   sending.value = true
   await scrollToBottom()
 
-  try {
-    const res = await fetch('/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        documentIds: selectedDocIds.value.length > 0 ? selectedDocIds.value : [0],
-        question: q,
-        topK: 5,
-      }),
-    })
+  // 기존 연결 있으면 닫기
+  if (es) { es.close(); es = null }
 
-    if (!res.ok) {
-      botMsg.text = `에러: ${res.status}\n${await res.text()}`
-      botMsg.loading = false
-      return
+  // 선택된 문서가 없으면 [0] (일반 채팅)으로 설정
+  const targetIds = selectedDocIds.value.length > 0 ? selectedDocIds.value : [0]
+  const docIdsParam = targetIds.join(',')
+  const url = `/chat/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5`
+
+  es = new EventSource(url)
+
+  es.addEventListener('delta', (e) => {
+    // Spring에서 data는 JSON 문자열로 오므로 파싱
+    const obj = JSON.parse(e.data)
+    if (obj.type === 'delta') {
+      botMsg.text += obj.text
+      scrollToBottom()
     }
+  })
 
-    const data = await res.json()
-    botMsg.text = data.answer ?? '(answer 없음)'
-    botMsg.citations = data.citations ?? []
+  es.addEventListener('meta', (e) => {
+    const obj = JSON.parse(e.data)
+    if (obj.type === 'end') {
+      botMsg.loading = false
+      botMsg.citations = obj.citations ?? []
+      sending.value = false
+      es.close()
+      es = null
+    }
+  })
+
+  es.onerror = () => {
+    botMsg.text = botMsg.text || '스트리밍 오류가 발생했습니다.'
     botMsg.loading = false
-  } catch (e) {
-    botMsg.text = `요청 실패: ${String(e)}`
-    botMsg.loading = false
-  } finally {
     sending.value = false
-    await scrollToBottom()
+    if (es) es.close()
+    es = null
   }
 }
 
-/** citations score 표시 */
-// function fmtScore(s) {
-//   if (typeof s !== 'number') return String(s ?? '')
-//   return s.toFixed(3)
-// }
 
+// 300초마다 문서 목록 갱신
+let timer = null
 onMounted(() => {
   loadDocuments()
+  timer = setInterval(loadDocuments, 300000) // 300초마다 갱신
 })
 
 const uploadBusy = ref(false)
@@ -214,9 +266,8 @@ function statusLabel(s) {
   if (s === 'PROCESSING') return '인덱싱 중'
   if (s === 'FAILED') return '실패'
   if (s === 'UPLOADED') return '업로드됨'
-  return s || ''
+  return s || '오류입니다.'
 }
-
 
 </script>
 
@@ -335,7 +386,7 @@ function statusLabel(s) {
           :disabled="sending"
           @keydown="onKeydown"
         />
-        <button class="send" :disabled="sending || !input.trim()" @click="send">
+        <button class="send" :disabled="sending || !input.trim()" @click="sendStream">
           {{ sending ? '전송중' : '전송' }}
         </button>
       </footer>
@@ -389,8 +440,8 @@ function statusLabel(s) {
 /* 입력창 */
 .composer { padding: 12px 16px; border-top: 1px solid #232327; display:flex; gap: 10px; align-items:flex-end; }
 .input { flex:1; min-height: 44px; max-height: 180px; resize: vertical; padding: 10px; border-radius: 12px; border: 1px solid #2a2a31; background:#141418; color:#eaeaea; }
-.send { width: 90px; height: 44px; border-radius: 12px; border: 1px solid #2a2a31; background:#1f1f26; color:#fff; cursor:pointer; }
-.send:disabled, .input:disabled { opacity: 0.6; cursor: not-allowed; }
+.sendStream { width: 90px; height: 44px; border-radius: 12px; border: 1px solid #2a2a31; background:#1f1f26; color:#fff; cursor:pointer; }
+.sendStream:disabled, .input:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* 문서 추가 */
 .upload-box { padding: 0 12px 12px; }

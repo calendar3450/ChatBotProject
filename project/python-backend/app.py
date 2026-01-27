@@ -11,7 +11,8 @@ import requests
 import traceback
 from fastapi import Body
 from fastapi.responses import JSONResponse
-
+from fastapi.responses import StreamingResponse
+import json, time
 
 app = FastAPI()
 
@@ -26,16 +27,15 @@ DATA_DIR.mkdir(exist_ok=True)
 OLLAMA_BASE = "http://localhost:11434"
 OLLAMA_MODEL = "qwen3-vl:8b"
 
-# 테스트용.
-class PingResponse(BaseModel):
-    status: str
+# # 테스트용.
+# class PingResponse(BaseModel):
+#     status: str
 
-@app.get("/ping", response_model=PingResponse)
-def ping():
-    return {"status": "ok"}
+# @app.get("/ping", response_model=PingResponse)
+# def ping():
+#     return {"status": "ok"}
 
-if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+
 
 
 class IngestRequest(BaseModel):
@@ -330,3 +330,33 @@ def chat(req: ChatRequest):
         import traceback
         traceback.print_exc() # 서버 콘솔에 상세 에러 로그 출력
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
+    
+# SSE 
+def sse_event(data: dict, event: str = "message") -> str:
+    # SSE 포맷: event: xxx \n data: yyy \n\n \n = 여기까지가 하나의 메시지 임을 나타냄.
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+@app.post("/chat_stream")
+def chat_stream(req: ChatRequest):
+    def gen():
+        # 1) (선택) 시작 이벤트
+        yield sse_event({"type": "start"}, event="meta")
+
+        # 2) 여기서 RAG 검색 -> prompt 구성은 기존 /chat 로직 그대로
+        # context, citations = ...
+        # prompt = ...
+
+        # 3) 토큰을 스트리밍으로 생성 (아래는 예시: 실제론 ollama 스트리밍으로 대체)
+        answer = "스트리밍 답변 예시입니다. 실제로는 토큰이 한 글자/한 단어씩 옵니다."
+        for ch in answer:
+            yield sse_event({"type": "delta", "text": ch}, event="delta")
+            time.sleep(0.01)
+
+        # 4) 끝 이벤트 + citations 한번에 전달
+        yield sse_event({"type": "end", "citations": []}, event="meta")
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
