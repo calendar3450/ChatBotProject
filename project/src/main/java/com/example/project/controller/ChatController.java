@@ -16,11 +16,12 @@ public class ChatController {
 
     private final PythonClientService pythonClientService;
 
+    // 생성자
     public ChatController(PythonClientService pythonClientService) {
         this.pythonClientService = pythonClientService;
     }
     
-
+    // 매써드
     @PostMapping("/chat")
     public Map<String, Object> chat(@Valid @RequestBody ChatRequest req) {
         return pythonClientService.chat(req.getDocumentIds(), req.getQuestion(), req.getTopK());
