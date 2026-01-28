@@ -185,6 +185,15 @@ async function sendStream() {
     }
   })
 
+  // ✅ 서버에서 보낸 명시적 에러 이벤트 처리
+  es.addEventListener('error', (e) => {
+    const obj = JSON.parse(e.data)
+    botMsg.text = `[서버 에러] ${obj.text}`
+    botMsg.loading = false
+    sending.value = false
+    if (es) { es.close(); es = null }
+  })
+
   es.onerror = () => {
     botMsg.text = botMsg.text || '스트리밍 오류가 발생했습니다.'
     botMsg.loading = false

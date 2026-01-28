@@ -27,13 +27,13 @@ DATA_DIR.mkdir(exist_ok=True)
 OLLAMA_BASE = "http://localhost:11434"
 OLLAMA_MODEL = "qwen3-vl:8b"
 
-# # 테스트용.
-# class PingResponse(BaseModel):
-#     status: str
+# 테스트용.
+class PingResponse(BaseModel):
+    status: str
 
-# @app.get("/ping", response_model=PingResponse)
-# def ping():
-#     return {"status": "ok"}
+@app.get("/ping", response_model=PingResponse)
+def ping():
+    return {"status": "ok"}
 
 
 
@@ -233,9 +233,10 @@ def ingest(req: IngestRequest):
         raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
 
 
-
 THRESHOLD = 0.90  # 필요하면 조정 RAG로 갈지 아니면 모델의 내용으로 갈지 확인.
 
+# ✅ GET 방식으로 변경하여 EventSource와 호환되도록 수정
+# ✅ 경로를 App.vue와 일치시킴 (/chat/stream)
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     try:
@@ -336,27 +337,68 @@ def sse_event(data: dict, event: str = "message") -> str:
     # SSE 포맷: event: xxx \n data: yyy \n\n \n = 여기까지가 하나의 메시지 임을 나타냄.
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-@app.post("/chat_stream")
-def chat_stream(req: ChatRequest):
-    def gen():
-        # 1) (선택) 시작 이벤트
-        yield sse_event({"type": "start"}, event="meta")
+# ✅ 중복된 함수명을 제거하고 하나로 통합 (GET 방식)
+@app.get("/chat/stream")
+def chat_stream_handler(docIds: str, q: str, topK: int = 5):
+    def generate():
+        try:
+            yield sse_event({"type": "start"}, event="meta")
+            
+            ids = [int(i) for i in docIds.split(",") if i.strip()]
+            
+            context = ""
+            citations = []
+            prompt = ""
 
-        # 2) 여기서 RAG 검색 -> prompt 구성은 기존 /chat 로직 그대로
-        # context, citations = ...
-        # prompt = ...
+            # 1) RAG 검색 로직
+            if ids != [0]:
+                qv = embed_query(q)
+                merged = []
+                # ... (검색 로직 생략) ...
+                for d_id in ids:
+                    try:
+                        chunks, index = load_doc_store(d_id)
+                        scores, f_ids = index.search(qv, topK)
+                        for rank, idx in enumerate(f_ids[0].tolist()):
+                            if idx >= 0:
+                                merged.append((float(scores[0][rank]), d_id, chunks[idx]))
+                    except: continue
+                
+                merged.sort(key=lambda x: x[0], reverse=True)
+                for r, (score, d_id, chunk) in enumerate(merged[:topK], 1):
+                    context += chunk["text"] + "\n\n"
+                    citations.append({"document_id": d_id, "page_from": chunk.get("page_from"), "page_to": chunk.get("page_to")})
+                
+                # RAG 프롬프트
+                prompt = f"""당신은 업로드된 PDF 문서의 내용에 근거해 답하는 어시스턴트입니다.
+                            한국어로만 답변하세요.
+                            [질문] {q}
+                            [근거] {context}
+                            [답변]"""
+            else:
+                # 일반 채팅 프롬프트
+                prompt = f"""당신은 유용한 한국어 어시스턴트입니다.
+                            한국어로만 답변하세요.
+                            [질문] {q}
+                            [답변]"""
 
-        # 3) 토큰을 스트리밍으로 생성 (아래는 예시: 실제론 ollama 스트리밍으로 대체)
-        answer = "스트리밍 답변 예시입니다. 실제로는 토큰이 한 글자/한 단어씩 옵니다."
-        for ch in answer:
-            yield sse_event({"type": "delta", "text": ch}, event="delta")
-            time.sleep(0.01)
+            # 2) Ollama 스트리밍 호출
+            url = f"{OLLAMA_BASE}/api/generate"
+            payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": True}
+            
+            # ✅ timeout 추가 및 프롬프트 적용
+            with requests.post(url, json=payload, stream=True, timeout=120) as r:
+                for line in r.iter_lines(decode_unicode=True):
+                    if line:
+                        chunk = json.loads(line)
+                        yield sse_event({"type": "delta", "text": chunk.get("response", "")}, event="delta")
+            
+            yield sse_event({"type": "end", "citations": citations}, event="meta")
+        except Exception as e:
+            traceback.print_exc() # 에러 로그 출력
+            yield sse_event({"type": "error", "text": str(e)}, event="error")
 
-        # 4) 끝 이벤트 + citations 한번에 전달
-        yield sse_event({"type": "end", "citations": []}, event="meta")
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
-
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
