@@ -78,6 +78,7 @@ public class DocumentService {
     
     }
 
+    //파일 한번에 id 만들어서 바로 전송.
     public Document createAndUpload (String title, MultipartFile file) throws IOException {
         Document d = create(title);
         return uploadFile(d.getId(), file);
@@ -104,5 +105,10 @@ public class DocumentService {
 
     return documentRepository.save(d);
 }
-
+    //파일 하나씩 제거.
+    public void delete(Long documentId) {
+        //파일 제거
+         Document d = documentRepository.findById(documentId).orElseThrow(() -> new IllegalArgumentException("문서가 없습니다." + documentId));
+         documentRepository.delete(d);
+    }
 }

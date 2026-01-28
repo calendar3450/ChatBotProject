@@ -14,7 +14,7 @@ public class PythonTestController {
     public PythonTestController(PythonClientService pythonClientService) {
         this.pythonClientService = pythonClientService;
     }
-
+    
     @GetMapping("/python/ping")
     public Map<String, Object> ping() {
         return pythonClientService.ping();

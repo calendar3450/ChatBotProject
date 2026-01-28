@@ -26,12 +26,14 @@ public class PythonClientService {
     private final RestTemplate restTemplate;
     private final String baseUrl;
 
+    // 생성자
     public PythonClientService(RestTemplate restTemplate,
                               @Value("${python.base-url}") String baseUrl) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl;
         }
-        
+
+    // 테스트용 코드
     public Map<String, Object> ping(){
         String url = baseUrl + "/ping";
         Map<String, Object> response = restTemplate.getForObject(url, Map.class);

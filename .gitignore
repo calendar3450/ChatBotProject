@@ -6,6 +6,7 @@ build/
 !**/src/test/**/build/
 uploads/
 data/
+python-backend/test.ipynb
 
 ### STS ###
 .apt_generated

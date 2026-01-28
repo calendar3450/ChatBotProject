@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +17,8 @@ import com.example.project.service.DocumentService;
 
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
+
 
 
 
@@ -60,6 +63,7 @@ public class DocumentController {
     //     return DocumentResponse.from(d);
     // }
 
+    //파일 업로드
     @PostMapping("/documents/uploads")
     public List<DocumentResponse> uploadMany (@RequestParam("files") List<MultipartFile> files) throws IOException{
         if (files == null || files.isEmpty()) {
@@ -77,10 +81,16 @@ public class DocumentController {
         return results;
     }
     
+    // 파일 임베딩
     @PostMapping("/documents/{id}/reingest")
     public DocumentResponse reingest(@PathVariable("id") Long id) {
         return DocumentResponse.from(documentService.reingest(id));
     }
     
+    // 파일 삭제
+    @DeleteMapping("/documents/{id}/delete")
+    public void delete(@PathVariable("id") Long id) {
+        documentService.delete(id);
+    }
     
 }

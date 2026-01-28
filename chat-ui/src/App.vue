@@ -45,6 +45,7 @@ async function scrollToBottom() {
   curScroll.scrollTop = curScroll.scrollHeight
 }
 
+
 /** 문서 목록 로딩 */
 async function loadDocuments() {
   loadingDocs.value = true
@@ -193,7 +194,6 @@ async function sendStream() {
   }
 }
 
-
 // 300초마다 문서 목록 갱신
 let timer = null
 onMounted(() => {
@@ -204,6 +204,7 @@ onMounted(() => {
 const uploadBusy = ref(false)
 const uploadError = ref('')
 
+// 파일 업로드
 async function uploadFiles(fileList) {
   uploadError.value = ''
   if (!fileList || fileList.length === 0) return
@@ -239,6 +240,26 @@ async function uploadFiles(fileList) {
     uploadBusy.value = false
   }
 }
+
+// 파일 삭제
+async function deleteDocument(id) {
+  if (!confirm('정말 삭제하시겠습니까?')) return
+
+  try {
+    // deleteMapping이므로 method는 DELETE로 설정.
+    const res = await fetch(`/documents/${id}/delete`, { method: 'DELETE' })
+    if (!res.ok) {
+      alert(`삭제 실패: ${res.status}\n${await res.text()}`)
+      return
+    }
+    // 목록 갱신 및 선택 해제
+    await loadDocuments()
+    if (selected.value.has(id)) toggleSelect(id)
+  } catch(e) {
+    alert(`삭제 요청 실패. 이유: ${String(e)}`)
+  }
+}
+
 
 function onPickFiles(e) {
   const files = e.target.files
@@ -346,6 +367,7 @@ function statusLabel(s) {
             >
               재시도
             </button>
+            <button class="retry delete" @click.prevent="deleteDocument(d.id)">삭제</button>
             </div>
           </div>
         </label>
@@ -395,6 +417,7 @@ function statusLabel(s) {
 </template>
 
 <style scoped>
+
 /* 전체 레이아웃 */
 .app { height: 100vh; display: grid; grid-template-columns: 320px 1fr; background: #0f0f10; color: #eaeaea; }
 
@@ -483,4 +506,10 @@ function statusLabel(s) {
   cursor: pointer;
 }
 .retry:hover { background: #272730; }
+
+.delete {
+  margin-left: 5px;
+  color: #ff6b6b;
+  border-color: #662222;
+}
 </style>
