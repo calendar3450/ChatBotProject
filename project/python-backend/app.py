@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 import json, time
 
+
 import gemini_service
 
 app = FastAPI()
@@ -349,41 +350,116 @@ def sse_event(data: dict, event: str = "message") -> str:
     # SSE 포맷: event: xxx \n data: yyy \n\n \n = 여기까지가 하나의 메시지 임을 나타냄.
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-@app.post("/chat_stream")
-def chat_stream(req: ChatRequest):
+@app.get("/chat/stream")
+def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "ollama"):
+    # docIds는 "1,2" 처럼 콤마로 구분된 문자열로 옴. 우선 첫 번째 ID만 사용하도록 처리
+    try:
+        first_id = int(docIds.split(",")[0])
+    except:
+        first_id = 0
+
+    req = ChatRequest(
+        document_id=first_id,
+        question=q,
+        top_k=topK,
+        model=model
+    )
+
     def gen():
         # 1) (선택) 시작 이벤트
         yield sse_event({"type": "start"}, event="meta")
-
-        # 2) 여기서 RAG 검색 -> prompt 구성은 기존 /chat 로직 그대로
-        # context, citations = ...
-        # prompt = ...
-
-        # 3) 토큰을 스트리밍으로 생성
-        # (실제 구현 시에는 위 chat 함수처럼 RAG 검색 및 prompt 구성 로직을 여기로 가져와야 합니다.)
-        # 예시로 Gemini 스트리밍 호출만 보여드립니다.
         
+        citations = []
+        prompt = ""
+
+        # --- 2) 프롬프트 및 컨텍스트 구성 (기존 chat 함수 로직 적용) ---
         if req.model == "gemini":
+            # Gemini용 프롬프트
             prompt = f"""당신은 유용한 한국어 어시스턴트입니다.
             반드시 한국어로만 답변하세요.
             
             [질문]
             {req.question}
             """
+        elif req.document_id == 0:
+            # Ollama 일반 대화
+            prompt = f""" 당신은 유용한 한국어 어시스턴트입니다.
+                반드시 한국어로만 답변하세요. 중국어 언어는 절대 사용하지 마세요.
+                사용자의 질문에 정확하고 간결하게 답하세요. 모르면 모른다고 하세요.
+                            
+            [질문]
+            {req.question}
+            [답변]
+            """
+        else:
+            # Ollama RAG (문서 검색)
+            try:
+                target_ids = [req.document_id]
+                qv = embed_query(req.question)
+                top_k = max(1, min(req.top_k, 10))
+
+                merged = []
+                for doc_id in target_ids:
+                    try:
+                        chunks, index = load_doc_store(doc_id)
+                        scores, ids = index.search(qv, top_k)
+                        for rank, idx in enumerate(ids[0].tolist()):
+                            if idx < 0: continue
+                            merged.append((float(scores[0][rank]), doc_id, idx, chunks[idx]))
+                    except FileNotFoundError:
+                        pass
+                
+                merged.sort(key=lambda x: x[0], reverse=True)
+                picked = merged[:top_k]
+
+                context_parts = []
+                for r, (score, doc_id, chunk_idx, chunk) in enumerate(picked, start=1):
+                    context_parts.append(chunk["text"])
+                    citations.append({
+                        "rank": r, "score": score, "document_id": doc_id,
+                        "page_from": chunk.get("page_from"), "page_to": chunk.get("page_to"),
+                        "chunk_index": chunk_idx
+                    })
+                
+                context = "\n\n---\n\n".join(context_parts)
+                prompt = f"""당신은 업로드된 PDF 문서의 내용에 근거해 답하는 어시스턴트입니다.
+                        규칙:
+                        0) 답변은 한국어로만 작성하세요.
+                        1) 문서 [근거]가 질문에 대한 분석적 추론을 시작하기에 '적절한 정보'를 담고 있는지 판정하세요.
+                            - 적절: 관련 키워드나 지표가 있음 (추론 진행)
+                            - 부족: 아예 관련 없는 주제 (대안 안내)
+                        2) '부족'이면 문서에 없는 정보를 억지로 연결하지 말고, 아래 '부족할 때 출력' 형식으로만 답하세요.
+                        3) '적절'할 경우, [근거]의 내용을 핵심 동인(Driver)으로 삼아 모델의 일반적인 산업 지식을 결합해 시나리오를 작성하세요. 단, 문서의 내용과 모델의 추론을 "문서에 따르면~", "산업 특성상 ~할 것으로 보이며"와 같이 명확히 구분하세요.
+                        4) 문서에 없는 사실(예: 최신 주가, 미래 확정 수치)은 만들지 마세요.
+                        5) 마지막에 "추가로 있으면 좋은 데이터" 3가지를 제안하세요.
+                        [질문]
+                        {req.question}
+                        [근거]
+                        {context}
+                        [출력 형식 - 충분/부분일 때]
+                        - 결론:
+                        - 근거 요약(3~5줄):
+                        - 추가로 있으면 좋은 데이터(3개):
+                        [답변]
+                        """
+            except Exception as e:
+                print(f"RAG Error: {e}")
+                prompt = req.question
+        
+        # --- 3) 스트리밍 답변 생성 ---
+        if req.model == "gemini":
             response = gemini_service.generate_gemini(prompt, stream=True)
             for chunk in response:
                 # 안전장치: safety filter 등으로 텍스트가 없을 경우 에러 방지
                 if chunk.parts:
                     yield sse_event({"type": "delta", "text": chunk.text}, event="delta")
         else:
-            # 기존 Ollama 더미/실제 로직
-            answer = "스트리밍 답변 예시입니다. (Ollama)"
-            for ch in answer:
-                yield sse_event({"type": "delta", "text": ch}, event="delta")
-                time.sleep(0.01)
+            # ✅ 전체 답변을 먼저 받고, 한 번에 전송 (프론트엔드에서 타이핑 효과 처리)
+            full_answer = ollama_generate(prompt)
+            yield sse_event({"type": "delta", "text": full_answer}, event="delta")
 
-        # 4) 끝 이벤트 + citations 한번에 전달
-        yield sse_event({"type": "end", "citations": []}, event="meta")
+        # 4) 끝 이벤트 + citations 전달
+        yield sse_event({"type": "end", "citations": citations}, event="meta")
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
