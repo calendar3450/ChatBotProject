@@ -3,6 +3,7 @@ package com.example.project.controller;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,8 @@ import com.example.project.service.PythonClientService;
 @RestController
 public class ChatStreamController {
     private final PythonClientService pythonClientService;
+    // 스레드 풀을 필드로 선언하여 재사용 (매 요청마다 생성 방지)
+    private final ExecutorService executor = Executors.newCachedThreadPool();
 
     //생성자
     public ChatStreamController(PythonClientService pythonClientService) {
@@ -29,7 +32,7 @@ public class ChatStreamController {
         // 서버가 연결이 되었는지 안되었는지 확인하기 위한 코드.
         SseEmitter emitter = new SseEmitter(0L); // timeout 무제한(개발 편의)
 
-        Executors.newSingleThreadExecutor().submit(() -> {
+        executor.submit(() -> {
             try {
                 pythonClientService.forwardSseToClient(req, emitter);
                 emitter.complete();
@@ -56,11 +59,13 @@ public class ChatStreamController {
     @GetMapping("/chat/stream")
     public SseEmitter chatStreamGet(@RequestParam("docIds") String docIds,
                                     @RequestParam("q") String q,
-                                    @RequestParam(value="topK", required=false) Integer topK) {
+                                    @RequestParam(value="topK", required=false) Integer topK,
+                                    @RequestParam("model") String model) {
         ChatRequest req = new ChatRequest();
         req.setDocumentIds(parseIds(docIds)); // "1,2,3" -> List<Long>
         req.setQuestion(q);
         req.setTopK(topK == null ? 5 : topK);
+        req.setModel(model);
         return chatStream(req);
     }
 

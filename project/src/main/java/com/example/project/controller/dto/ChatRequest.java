@@ -13,6 +13,7 @@ public class ChatRequest {
     @NotBlank
     private String question;
     private Integer topK = 5;
+    private String model = "qwen3-vl:8b";
 
     public List<Long> getDocumentIds() { return documentIds; }
     public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
@@ -22,4 +23,7 @@ public class ChatRequest {
 
     public Integer getTopK() { return topK; }
     public void setTopK(Integer topK) { this.topK = topK; }
+
+    public String getModel() {return model;}
+    public void setModel(String model) {this.model = model;}
 }

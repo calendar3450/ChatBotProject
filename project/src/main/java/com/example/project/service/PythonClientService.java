@@ -2,6 +2,7 @@ package com.example.project.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.example.project.controller.dto.ChatRequest;
@@ -57,6 +58,13 @@ public class PythonClientService {
 
     //파이썬 chat post로 이동.
     public Map<String, Object> chat(List<Long> documentIds, String question, Integer topK) {
+    // [테스트용] 일반 채팅(Non-streaming)에서도 mock: 지원
+    if (question != null && question.trim().startsWith("mock:")) {
+        return Map.of(
+            "answer", "이것은 파이썬 서버 없이 Java에서 생성된 테스트 응답입니다. (Non-streaming)",
+            "citations", List.of()
+        );
+    }
     String url = baseUrl + "/chat";
 
     // 파이썬 서버가 document_id를 단일 int로 요구합니다.
@@ -74,6 +82,14 @@ public class PythonClientService {
     
     // 그대로 읽어서 vue로 전달.
     public void forwardSseToClient(ChatRequest req, SseEmitter emitter) throws Exception {
+        // [테스트용] 질문이 "mock:"으로 시작하면 파이썬 서버 연결 없이 더미 데이터 스트리밍
+        if (req.getQuestion() != null && req.getQuestion().trim().toLowerCase().startsWith("mock:")) {
+            System.out.println(">> [Mock] 테스트 스트리밍 시작: " + req.getQuestion());
+            simulateStreamingResponse(emitter, req.getQuestion());
+            return;
+        }
+        // 여기까지는 시뮬레이션
+
         // 연결 설정. Python의 post와 연결 하기 설정.
         URL url = new URL(baseUrl + "/chat_stream");
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
@@ -136,17 +152,56 @@ public class PythonClientService {
     // ⚠️ 임시 JSON 직렬화 (정석은 ObjectMapper)
     private String toJson(ChatRequest req) {
         // req: documentIds(List<Long>), question(String), topK(Integer)
-        // Python 쪽은 snake_case(document_ids, top_k)로 받는다고 했으니 맞춰줍니다.
-        String ids = req.getDocumentIds().toString(); // [1, 2]
+        
+        // 1. document_ids (List) -> document_id (int) 변환
+        // app.py의 ChatRequest가 document_id(int)를 기대하므로 첫 번째 ID만 추출하거나 0(일반 채팅)으로 설정
+        List<Long> ids = req.getDocumentIds();
+        long docId = (ids == null || ids.isEmpty() || ids.contains(0L)) ? 0L : ids.get(0);
+
         String q = req.getQuestion().replace("\\", "\\\\").replace("\"", "\\\"");
         int topK = (req.getTopK() == null) ? 5 : req.getTopK();
+        String model = (req.getModel() == null) ? "ollama" : req.getModel();
 
         return "{"
-                + "\"document_ids\":" + ids + ","
+                + "\"document_id\":" + docId + ","
                 + "\"question\":\"" + q + "\","
-                + "\"top_k\":" + topK
+                + "\"top_k\":" + topK + ","
+                + "\"model\":\"" + model + "\""
                 + "}";
     }
 
+        // 테스트용 더미 스트리밍 생성 (파이썬 서버 없이 동작 확인용)
+    private void simulateStreamingResponse(SseEmitter emitter, String question) {
+        try {
+            // 1. 시작 이벤트 (meta) - 파이썬 서버의 포맷을 흉내냄
+            emitter.send(SseEmitter.event().name("meta").data("{\"type\": \"start\"}", MediaType.APPLICATION_JSON));
 
+            String message = "이것은 파이썬 서버 없이 Java에서 생성된 테스트 스트리밍 메시지입니다. 입력하신 질문: " + question;
+            for (char c : message.toCharArray()) {
+                // 2. 텍스트 조각 이벤트 (delta)
+                // JSON 포맷: {"type": "delta", "text": "글자"}
+                // 특수문자 처리 강화
+                String safeChar = String.valueOf(c)
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r")
+                    .replace("\t", "\\t");
+                
+                String json = "{\"type\": \"delta\", \"text\": \"" + safeChar + "\"}";
+                emitter.send(SseEmitter.event().name("delta").data(json, MediaType.APPLICATION_JSON));
+                
+                // 실제 타이핑 효과처럼 지연 (0.05초)
+                Thread.sleep(50);
+            }
+
+            // 3. 종료 이벤트 (meta)
+            emitter.send(SseEmitter.event().name("meta").data("{\"type\": \"end\", \"citations\": []}", MediaType.APPLICATION_JSON));
+            
+            emitter.complete();
+        } catch (Exception e) {
+            System.err.println(">> [Mock] 스트리밍 중 에러 발생: " + e.getMessage());
+            emitter.completeWithError(e);
+        }
+    }
 }

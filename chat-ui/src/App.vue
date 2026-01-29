@@ -33,6 +33,7 @@ const sending = ref(false)
 const loadingDocs = ref(false)
 const docError = ref('')
 const chatRef = ref(null)
+const useGemini = ref(false) // 모델 선택 토글 (false=Ollama, true=Gemini)
 
 //값을 자동으로 갱신하여 set집합에 데이터를 보냄.
 const selectedDocIds = computed(() => Array.from(selected.value))
@@ -95,54 +96,9 @@ function onKeydown(e) {
   }
 }
 
-// /** 채팅 전송 */
-// async function send() {
-//   const q = input.value.trim()
-//   if (!q || sending.value) return
-
-//   // 1) 사용자 메시지
-//   messages.value.push({ role: 'user', text: q })
-//   input.value = ''
-
-//   // 2) 로딩 말풍선
-//   const botMsg = { role: 'assistant', text: '답변 생성 중...', loading: true, citations: [] }
-//   messages.value.push(botMsg)
-
-//   sending.value = true
-//   await scrollToBottom()
-
-//   try {
-//     const res = await fetch('/chat', {
-//       method: 'POST',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify({
-//         documentIds: selectedDocIds.value.length > 0 ? selectedDocIds.value : [0],
-//         question: q,
-//         topK: 5,
-//       }),
-//     })
-
-//     if (!res.ok) {
-//       botMsg.text = `에러: ${res.status}\n${await res.text()}`
-//       botMsg.loading = false
-//       return
-//     }
-
-//     const data = await res.json()
-//     botMsg.text = data.answer ?? '(answer 없음)'
-//     botMsg.citations = data.citations ?? []
-//     botMsg.loading = false
-//   } catch (e) {
-//     botMsg.text = `요청 실패: ${String(e)}`
-//     botMsg.loading = false
-//   } finally {
-//     sending.value = false
-//     await scrollToBottom()
-//   }
-// }
-
-// send()를 stream기능을 넣어서 바꿈.
 let es = null
+
+// 메세지를 챗봇에게 보냄.
 async function sendStream() {
   const q = input.value.trim()
   if (!q || sending.value) return
@@ -161,7 +117,8 @@ async function sendStream() {
   // 선택된 문서가 없으면 [0] (일반 채팅)으로 설정
   const targetIds = selectedDocIds.value.length > 0 ? selectedDocIds.value : [0]
   const docIdsParam = targetIds.join(',')
-  const url = `/chat/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5`
+  const model = useGemini.value ? 'gemini' : 'ollama'
+  const url = `/chat/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5&model=${model}`
 
   es = new EventSource(url)
 
@@ -183,15 +140,6 @@ async function sendStream() {
       es.close()
       es = null
     }
-  })
-
-  // ✅ 서버에서 보낸 명시적 에러 이벤트 처리
-  es.addEventListener('error', (e) => {
-    const obj = JSON.parse(e.data)
-    botMsg.text = `[서버 에러] ${obj.text}`
-    botMsg.loading = false
-    sending.value = false
-    if (es) { es.close(); es = null }
   })
 
   es.onerror = () => {
@@ -386,7 +334,13 @@ function statusLabel(s) {
     <!-- 메인 채팅 영역 -->
     <section class="main">
       <header class="topbar">
-        <div class="title">Doc Chat</div>
+        <div class="header-left">
+          <div class="title">Doc Chat</div>
+          <label class="model-toggle">
+            <input type="checkbox" v-model="useGemini">
+            <span class="toggle-text">{{ useGemini ? 'Gemini' : 'Ollama' }}</span>
+          </label>
+        </div>
         <div class="meta">선택 문서 IDs: {{ selectedDocIds.join(', ') || '없음' }}</div>
       </header>
 
@@ -455,6 +409,7 @@ function statusLabel(s) {
 /* 메인 */
 .main { display: flex; flex-direction: column; }
 .topbar { padding: 12px 16px; border-bottom: 1px solid #232327; display:flex; justify-content:space-between; align-items:center; }
+.header-left { display: flex; align-items: center; gap: 12px; }
 .title { font-weight: 800; }
 .meta { font-size: 12px; opacity: 0.85; }
 
@@ -521,4 +476,17 @@ function statusLabel(s) {
   color: #ff6b6b;
   border-color: #662222;
 }
+
+.model-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #1f1f26;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #2a2a31;
+}
+.toggle-text { font-weight: bold; color: #8ab4ff; }
 </style>
