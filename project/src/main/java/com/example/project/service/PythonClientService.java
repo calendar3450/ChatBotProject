@@ -174,29 +174,20 @@ public class PythonClientService {
     private void simulateStreamingResponse(SseEmitter emitter, String question) {
         try {
             // 1. 시작 이벤트 (meta) - 파이썬 서버의 포맷을 흉내냄
-            emitter.send(SseEmitter.event().name("meta").data("{\"type\": \"start\"}", MediaType.APPLICATION_JSON));
+            emitter.send(SseEmitter.event().name("meta").data(Map.of("type", "start")));
 
             String message = "이것은 파이썬 서버 없이 Java에서 생성된 테스트 스트리밍 메시지입니다. 입력하신 질문: " + question;
             for (char c : message.toCharArray()) {
                 // 2. 텍스트 조각 이벤트 (delta)
-                // JSON 포맷: {"type": "delta", "text": "글자"}
-                // 특수문자 처리 강화
-                String safeChar = String.valueOf(c)
-                    .replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
-                    .replace("\n", "\\n")
-                    .replace("\r", "\\r")
-                    .replace("\t", "\\t");
-                
-                String json = "{\"type\": \"delta\", \"text\": \"" + safeChar + "\"}";
-                emitter.send(SseEmitter.event().name("delta").data(json, MediaType.APPLICATION_JSON));
+                Map<String, String> data = Map.of("type", "delta", "text", String.valueOf(c));
+                emitter.send(SseEmitter.event().name("delta").data(data));
                 
                 // 실제 타이핑 효과처럼 지연 (0.05초)
                 Thread.sleep(50);
             }
 
             // 3. 종료 이벤트 (meta)
-            emitter.send(SseEmitter.event().name("meta").data("{\"type\": \"end\", \"citations\": []}", MediaType.APPLICATION_JSON));
+            emitter.send(SseEmitter.event().name("meta").data(Map.of("type", "end", "citations", List.of())));
             
             emitter.complete();
         } catch (Exception e) {

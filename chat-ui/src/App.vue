@@ -19,7 +19,7 @@
  */ -->
 
 <script setup>
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, reactive } from 'vue'
 
 const documents = ref([])
 const selected = ref(new Set())
@@ -120,29 +120,15 @@ async function sendStream() {
   const model = useGemini.value ? 'gemini' : 'ollama'
   const url = `/chat/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5&model=${model}`
 
+  // Java 서버의 /chat/stream 엔드포인트로 GET 요청을 보내 연결
   es = new EventSource(url)
 
-  // 타이핑 효과를 위한 큐와 로직
-  const queue = []
-  let isTyping = false
-
-  const processQueue = async () => {
-    if (queue.length === 0) {
-      isTyping = false
-      return
-    }
-    isTyping = true
-    const chunk = queue.splice(0, 2).join('') // 한 번에 2글자씩 출력 (속도 조절)
-    botMsg.text += chunk
-    await scrollToBottom()
-    setTimeout(processQueue, 20) // 20ms 간격으로 다음 글자 출력
-  }
-
   es.addEventListener('delta', (e) => {
+    // Spring에서 data는 JSON 문자열로 오므로 파싱
     const obj = JSON.parse(e.data)
-    if (obj.text) {
-      queue.push(...obj.text.split(''))
-      if (!isTyping) processQueue()
+    if (obj.type === 'delta') {
+      botMsg.text += obj.text
+      scrollToBottom()
     }
   })
 
@@ -442,8 +428,8 @@ function statusLabel(s) {
 /* 입력창 */
 .composer { padding: 12px 16px; border-top: 1px solid #232327; display:flex; gap: 10px; align-items:flex-end; }
 .input { flex:1; min-height: 44px; max-height: 180px; resize: vertical; padding: 10px; border-radius: 12px; border: 1px solid #2a2a31; background:#141418; color:#eaeaea; }
-.send { width: 90px; height: 44px; border-radius: 12px; border: 1px solid #2a2a31; background:#1f1f26; color:#fff; cursor:pointer; }
-.send:disabled, .input:disabled { opacity: 0.6; cursor: not-allowed; }
+.sendStream { width: 90px; height: 44px; border-radius: 12px; border: 1px solid #2a2a31; background:#1f1f26; color:#fff; cursor:pointer; }
+.sendStream:disabled, .input:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* 문서 추가 */
 .upload-box { padding: 0 12px 12px; }
