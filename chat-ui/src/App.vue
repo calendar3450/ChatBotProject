@@ -25,7 +25,7 @@ const documents = ref([])
 const selected = ref(new Set())
 
 const messages = ref([
-  { role: 'assistant', text: '왼쪽에서 문 emphasizes: 문서를 체크하고 질문해보세요.', citations: [] },
+  { role: 'assistant', text: '왼쪽에서 문서를 업로드 하고 문서를 체크하고 질문해보세요.', citations: [] },
 ])
 
 const input = ref('')
@@ -69,6 +69,24 @@ async function loadDocuments() {
     loadingDocs.value = false
   }
 }
+
+// /* 채팅 로딩 */
+// async function loadChat() {
+//   loadingChat.value = true
+//   chatError.value = ''
+//   try {
+//     const res = await fetch('/chat/stream')
+//     if (!res.ok) {
+//       chatError.value = `채팅 에러: ${res.status} ${await res.text()}`
+//       return
+//     }
+//     const data = await res.json()
+//     // createdAt 내림차순(있을 때만)
+//     data.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+//     }
+  
+// }
+
 
 function isSelectable(doc) {
   // 상태가 DONE일 때만 선택 가능하게 (status가 없다면 filePath 존재 여부로 대충 판단)

@@ -1,5 +1,7 @@
 package com.example.project.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.MediaType;
@@ -18,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.net.URL;
+import java.util.function.Consumer;
 
 import org.springframework.beans.factory.annotation.Value;
 
@@ -26,13 +29,16 @@ public class PythonClientService {
 
     private final RestTemplate restTemplate;
     private final String baseUrl;
+    private final ObjectMapper objectMapper;
 
     // 생성자
     public PythonClientService(RestTemplate restTemplate,
-                              @Value("${python.base-url}") String baseUrl) {
+                              @Value("${python.base-url}") String baseUrl,
+                              ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl;
-        }
+        this.objectMapper = objectMapper;
+    }
 
     // 테스트용 코드
     public Map<String, Object> ping(){
@@ -81,14 +87,7 @@ public class PythonClientService {
     }   
     
     // 그대로 읽어서 vue로 전달.
-    public void forwardSseToClient(ChatRequest req, SseEmitter emitter) throws Exception {
-        // [테스트용] 질문이 "mock:"으로 시작하면 파이썬 서버 연결 없이 더미 데이터 스트리밍
-        if (req.getQuestion() != null && req.getQuestion().trim().toLowerCase().startsWith("mock:")) {
-            System.out.println(">> [Mock] 테스트 스트리밍 시작: " + req.getQuestion());
-            simulateStreamingResponse(emitter, req.getQuestion());
-            return;
-        }
-        // 여기까지는 시뮬레이션
+    public void forwardSseToClient(ChatRequest req, SseEmitter emitter, Consumer<String> onComplete) throws Exception {
 
         // 연결 설정. Python의 post와 연결 하기 설정.
         URL url = new URL(baseUrl + "/chat_stream");
@@ -115,12 +114,22 @@ public class PythonClientService {
             String line;
             String eventName = "message";
             StringBuilder dataBuf = new StringBuilder();
+            StringBuilder fullAnswer = new StringBuilder(); // 전체 답변 누적용
 
             while ((line = br.readLine()) != null) {
                 // SSE는 빈 줄이 "이벤트 끝" 구분자
                 if (line.isEmpty()) {
                     if (dataBuf.length() > 0) {
-                        emitter.send(SseEmitter.event().name(eventName).data(dataBuf.toString()));
+                        String payload = dataBuf.toString();
+                        // 답변 텍스트 누적 (delta 이벤트인 경우)
+                        try {
+                            JsonNode node = objectMapper.readTree(payload);
+                            if (node.has("type") && "delta".equals(node.get("type").asText()) && node.has("text")) {
+                                fullAnswer.append(node.get("text").asText());
+                            }
+                        } catch (Exception ignore) {}
+
+                        emitter.send(SseEmitter.event().name(eventName).data(payload));
                         dataBuf.setLength(0);
                         eventName = "message";
                     }
@@ -135,6 +144,10 @@ public class PythonClientService {
                     if (dataBuf.length() > 0) dataBuf.append("\n");
                     dataBuf.append(payload);
                 }
+            }
+            // 스트리밍 종료 후 전체 답변 콜백 실행
+            if (onComplete != null) {
+                onComplete.accept(fullAnswer.toString());
             }
         }
     }
@@ -170,29 +183,4 @@ public class PythonClientService {
                 + "}";
     }
 
-        // 테스트용 더미 스트리밍 생성 (파이썬 서버 없이 동작 확인용)
-    private void simulateStreamingResponse(SseEmitter emitter, String question) {
-        try {
-            // 1. 시작 이벤트 (meta) - 파이썬 서버의 포맷을 흉내냄
-            emitter.send(SseEmitter.event().name("meta").data(Map.of("type", "start")));
-
-            String message = "이것은 파이썬 서버 없이 Java에서 생성된 테스트 스트리밍 메시지입니다. 입력하신 질문: " + question;
-            for (char c : message.toCharArray()) {
-                // 2. 텍스트 조각 이벤트 (delta)
-                Map<String, String> data = Map.of("type", "delta", "text", String.valueOf(c));
-                emitter.send(SseEmitter.event().name("delta").data(data));
-                
-                // 실제 타이핑 효과처럼 지연 (0.05초)
-                Thread.sleep(50);
-            }
-
-            // 3. 종료 이벤트 (meta)
-            emitter.send(SseEmitter.event().name("meta").data(Map.of("type", "end", "citations", List.of())));
-            
-            emitter.complete();
-        } catch (Exception e) {
-            System.err.println(">> [Mock] 스트리밍 중 에러 발생: " + e.getMessage());
-            emitter.completeWithError(e);
-        }
-    }
 }

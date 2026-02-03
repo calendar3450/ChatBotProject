@@ -14,16 +14,19 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.example.project.controller.dto.ChatRequest;
 import com.example.project.service.PythonClientService;
+import com.example.project.service.ChatHistoryService;
 
 @RestController
 public class ChatStreamController {
     private final PythonClientService pythonClientService;
+    private final ChatHistoryService chatHistoryService;
     // 스레드 풀을 필드로 선언하여 재사용 (매 요청마다 생성 방지)
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
     //생성자
-    public ChatStreamController(PythonClientService pythonClientService) {
+    public ChatStreamController(PythonClientService pythonClientService, ChatHistoryService chatHistoryService) {
         this.pythonClientService = pythonClientService;
+        this.chatHistoryService = chatHistoryService;
     }
 
     //메서드
@@ -32,9 +35,14 @@ public class ChatStreamController {
         // 서버가 연결이 되었는지 안되었는지 확인하기 위한 코드.
         SseEmitter emitter = new SseEmitter(0L); // timeout 무제한(개발 편의)
 
+        // 1. 사용자 질문 저장
+        chatHistoryService.saveMessage("user", req.getQuestion());
+
         executor.submit(() -> {
             try {
-                pythonClientService.forwardSseToClient(req, emitter);
+                // 2. 답변 스트리밍 및 완료 시 저장
+                pythonClientService.forwardSseToClient(req, emitter, 
+                    (fullAnswer) -> chatHistoryService.saveMessage("assistant", fullAnswer));
                 emitter.complete();
             } catch (Exception e) {
                 try {

@@ -15,6 +15,17 @@ public class ChatRequest {
     private Integer topK = 5;
     private String model = "qwen3-vl:8b";
 
+    // 여기 고쳐줘!!!! 저장된 채팅을 DB로 부터 받아오기.
+
+    // public static void ChatRequest from (ChatMessage msg) {
+    //     ChatRequest c = new ChatRequest();
+    //     c.documentIds = msg.getDocumentIds();
+    //     c.question = msg.getQuestion();
+    //     c.topK = msg.getTopK();
+    //     c.model = msg.getModel();
+    //     return c;
+    // }
+
     public List<Long> getDocumentIds() { return documentIds; }
     public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
 
