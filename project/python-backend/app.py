@@ -64,27 +64,6 @@ class ChatResponse(BaseModel):
     citations: list[dict]
 
 
-# 테스트용 코드 깨진 한글 잡기 위해 사용.
-def ollama_chat_korean(user_text: str) -> str:
-    url = f"{OLLAMA_BASE}/api/chat"
-    payload = {
-        "model": OLLAMA_MODEL,
-        "stream": True,
-        "options": {"temperature": 0.2},
-        "messages": [
-            {"role": "system", "content": "당신은 한국어로만 답합니다. 중국어 또는 영어를 절대 사용하지 마세요. 출력은 자연스러운 한국어 문장으로만 작성하세요."},
-            {"role": "user", "content": user_text}
-        ]
-    }
-
-    r = requests.post(url, json=payload, timeout=120)
-    r.raise_for_status()
-
-    # ✅ bytes -> utf-8 로 확정 디코딩 후 JSON 파싱
-    data = json.loads(r.content.decode("utf-8"))
-    return (data["message"]["content"] or "").strip()
-
-
 def extract_pdf_text(file_path: str):
     p = Path(file_path)
 
@@ -368,7 +347,8 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
     def gen():
         # 1) (선택) 시작 이벤트
         yield sse_event({"type": "start"}, event="meta")
-        
+
+    
         citations = []
         prompt = ""
 
@@ -446,17 +426,21 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
                 print(f"RAG Error: {e}")
                 prompt = req.question
         
+        full_text = ""
         # --- 3) 스트리밍 답변 생성 ---
         if req.model == "gemini":
             response = gemini_service.generate_gemini(prompt, stream=True)
             for chunk in response:
                 # 안전장치: safety filter 등으로 텍스트가 없을 경우 에러 방지
                 if chunk.parts:
-                    yield sse_event({"type": "delta", "text": chunk.text}, event="delta")
+                    text_chunk = chunk.text
+                    full_text += text_chunk
+                    yield sse_event({"type": "delta", "text": text_chunk}, event="delta")
+        # 여기 오라마 모델을 사용할때, 스트리밍이 안되는 현상 발견!
         else:
             # ✅ 전체 답변을 먼저 받고, 한 번에 전송 (프론트엔드에서 타이핑 효과 처리)
-            full_answer = ollama_generate(prompt)
-            yield sse_event({"type": "delta", "text": full_answer}, event="delta")
+            full_text = ollama_generate(prompt)
+            yield sse_event({"type": "delta", "text": full_text}, event="delta")
 
         # 4) 끝 이벤트 + citations 전달
         yield sse_event({"type": "end", "citations": citations}, event="meta")

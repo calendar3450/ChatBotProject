@@ -1,39 +1,21 @@
 
 
-<!-- // const message = ref('안녕하세요')
-// const button_message = ref('클릭')
-
-// function changeMessage() {
-//   if (message.value === '안녕하세요') {
-//     message.value = '버튼을 눌렀어요!'
-//     button_message.value = '클릭했어요!'
-
-//   } else {
-//     message.value = '안녕하세요'
-//     button_message.value = '클릭!'
-//   }
-// }
-/**
- * documents: Spring GET /documents 결과를 저장
- * selected: 체크된 문서 id Set
- */ -->
-
 <script setup>
 import { ref, onMounted, computed, nextTick, reactive } from 'vue'
 
 const documents = ref([])
 const selected = ref(new Set())
-
-const messages = ref([
-  { role: 'assistant', text: '왼쪽에서 문서를 업로드 하고 문서를 체크하고 질문해보세요.', citations: [] },
-])
-
+const messages = ref([])
 const input = ref('')
 const sending = ref(false)
+//문서 영역
 const loadingDocs = ref(false)
 const docError = ref('')
+// 채팅 영역
 const chatRef = ref(null)
 const useGemini = ref(false) // 모델 선택 토글 (false=Ollama, true=Gemini)
+const loadingChat= ref(false)
+const chatError = ref('')
 
 //값을 자동으로 갱신하여 set집합에 데이터를 보냄.
 const selectedDocIds = computed(() => Array.from(selected.value))
@@ -45,7 +27,6 @@ async function scrollToBottom() {
   if (!curScroll) return
   curScroll.scrollTo({ top: curScroll.scrollHeight + 100, behavior: 'smooth' })
 }
-
 
 /** 문서 목록 로딩 */
 async function loadDocuments() {
@@ -70,22 +51,35 @@ async function loadDocuments() {
   }
 }
 
-// /* 채팅 로딩 */
-// async function loadChat() {
-//   loadingChat.value = true
-//   chatError.value = ''
-//   try {
-//     const res = await fetch('/chat/stream')
-//     if (!res.ok) {
-//       chatError.value = `채팅 에러: ${res.status} ${await res.text()}`
-//       return
-//     }
-//     const data = await res.json()
-//     // createdAt 내림차순(있을 때만)
-//     data.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-//     }
-  
-// }
+/* 채팅 했던것 가져오기*/
+async function loadMessages() {
+  loadingChat.value = true
+  chatError.value = ''
+  try {
+    // Spring GET /chats
+    const res = await fetch('/chats')
+    if (!res.ok) {
+      chatError.value = `채팅 목록 에러: ${res.status} ${await res.text()}`
+      
+      messages.value = [{ role: 'assistant', text: '문제가 있는거 같은데 다시 시도해주십시오. 왼쪽에서 문서를 업로드 하고 문서를 체크하고 질문해보세요.', citations: [] },]
+      return
+    }
+    const data = await res.json()
+    // 1. DB에 저장된 대화가 있으면 우선적으로 표시
+    if (data && data.length > 0) {
+      messages.value = data
+      scrollToBottom()
+    } else if (messages.value.length === 0) {
+      // 2. 데이터가 없고 기존 메시지도 없으면 환영 메시지 표시
+      messages.value = [{ role: 'assistant', text: '왼쪽에서 문서를 업로드 하고 문서를 체크하고 질문해보세요.', citations: [] }]
+    }
+    
+  } catch (e) {
+    chatError.value = `채팅 목록 요청 실패: ${String(e)}`
+  } finally {
+    loadingChat.value = false
+  }
+}
 
 
 function isSelectable(doc) {
@@ -116,7 +110,8 @@ function onKeydown(e) {
 
 let es = null
 
-// 메세지를 챗봇에게 보냄.
+// 메세지를 챗봇에게 보냄. 
+// 문제는 여기다 할일 적기.
 async function sendStream() {
   const q = input.value.trim()
   if (!q || sending.value) return
@@ -136,11 +131,13 @@ async function sendStream() {
   const targetIds = selectedDocIds.value.length > 0 ? selectedDocIds.value : [0]
   const docIdsParam = targetIds.join(',')
   const model = useGemini.value ? 'gemini' : 'ollama'
-  const url = `/chat/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5&model=${model}`
+  const url = `/chats/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5&model=${model}`
+  
 
-  // Java 서버의 /chat/stream 엔드포인트로 GET 요청을 보내 연결
+  // Java 서버의 /chats/stream 엔드포인트로 GET 요청 (DB 저장 후 Python으로 중계)
   es = new EventSource(url)
 
+  //채팅 가져오기
   es.addEventListener('delta', (e) => {
     // Spring에서 data는 JSON 문자열로 오므로 파싱
     const obj = JSON.parse(e.data)
@@ -150,6 +147,7 @@ async function sendStream() {
     }
   })
 
+// 채팅이 마지막 일때
   es.addEventListener('meta', (e) => {
     const obj = JSON.parse(e.data)
     if (obj.type === 'end') {
@@ -162,18 +160,20 @@ async function sendStream() {
   })
 
   es.onerror = () => {
-    botMsg.text = botMsg.text || '스트리밍 오류가 발생했습니다.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@2'
+    botMsg.text = botMsg.text || '오류가 발생했습니다.'
     botMsg.loading = false
     sending.value = false
     if (es) es.close()
     es = null
   }
+
 }
 
 // 300초마다 문서 목록 갱신
 let timer = null
 onMounted(() => {
   loadDocuments()
+  loadMessages()
   timer = setInterval(loadDocuments, 300000) // 300초마다 갱신
 })
 
@@ -187,7 +187,7 @@ async function uploadFiles(fileList) {
 
   const formData = new FormData()
   for (const f of fileList) {
-    formData.append('files', f)   // ✅ key 이름: "files"
+    formData.append('files', f)   // key 이름: "files"
   }
 
   uploadBusy.value = true
@@ -244,6 +244,7 @@ function onPickFiles(e) {
   e.target.value = ''
 }
 
+// 문서 임배딩.
 async function reingestDoc(id) {
   try {
     const res = await fetch(`/documents/${id}/reingest`, { method: 'POST' })

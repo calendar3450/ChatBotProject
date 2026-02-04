@@ -30,16 +30,16 @@ public class ChatStreamController {
     }
 
     //메서드
-    @PostMapping("/chat/stream")
+    @PostMapping("/chats/stream")
     public SseEmitter chatStream(@RequestBody ChatRequest req) {
         // 서버가 연결이 되었는지 안되었는지 확인하기 위한 코드.
         SseEmitter emitter = new SseEmitter(0L); // timeout 무제한(개발 편의)
 
-        // 1. 사용자 질문 저장
-        chatHistoryService.saveMessage("user", req.getQuestion());
-
         executor.submit(() -> {
             try {
+                // 1. 사용자 질문 저장
+                chatHistoryService.saveMessage("user", req.getQuestion());
+
                 // 2. 답변 스트리밍 및 완료 시 저장
                 pythonClientService.forwardSseToClient(req, emitter, 
                     (fullAnswer) -> chatHistoryService.saveMessage("assistant", fullAnswer));
@@ -55,6 +55,7 @@ public class ChatStreamController {
         return emitter;
     }
 
+
     private List<Long> parseIds(String s) {
     return Arrays.stream(s.split(","))
             .map(String::trim)
@@ -64,7 +65,7 @@ public class ChatStreamController {
     }
 
 
-    @GetMapping("/chat/stream")
+    @GetMapping("/chats/stream")
     public SseEmitter chatStreamGet(@RequestParam("docIds") String docIds,
                                     @RequestParam("q") String q,
                                     @RequestParam(value="topK", required=false) Integer topK,

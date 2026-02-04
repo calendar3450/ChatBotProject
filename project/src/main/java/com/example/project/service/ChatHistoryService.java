@@ -1,9 +1,9 @@
 package com.example.project.service;
 
+import org.springframework.stereotype.Service;
+
 import com.example.project.domain.ChatMessage;
 import com.example.project.repository.ChatMessageRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ChatHistoryService {
@@ -14,7 +14,7 @@ public class ChatHistoryService {
         this.chatMessageRepository = chatMessageRepository;
     }
 
-    @Transactional
+    // DB에 저장하려고 msg에서 각각의 것들 빼와 가져오고 저장.
     public void saveMessage(String role, String content) {
         ChatMessage msg = new ChatMessage();
         msg.setRole(role);
