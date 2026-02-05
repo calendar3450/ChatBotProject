@@ -36,13 +36,6 @@ public class PythonClientService {
         this.objectMapper = new ObjectMapper();
         }
 
-    // 테스트용 코드
-    public Map<String, Object> ping(){
-        String url = baseUrl + "/ping";
-        Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-        return response;
-    }
-
     public Map<String, Object> ingestDocument(Document document) {
         String url = baseUrl + "/ingest";
 
@@ -81,18 +74,19 @@ public class PythonClientService {
         String docIds = req.getDocumentIds().toString().replaceAll("[\\[\\] ]", ""); // [1, 2] -> 1,2
         String q = URLEncoder.encode(req.getQuestion(), StandardCharsets.UTF_8);
         int topK = (req.getTopK() == null) ? 3 : req.getTopK();
-        
-        // URL 생성: /chat/stream?docIds=1,2&q=질문&topK=3
-        String query = String.format("?docIds=%s&q=%s&topK=%d&model=ollama", docIds, q, topK);
+        String model = req.getModel();
+
+        // URL 생성: /chat/stream?docIds=1,2&q=질문&topK=3 여기서 모델을 인식해야함
+        String query = String.format("?docIds=%s&q=%s&topK=%d&model=%s", docIds, q, topK, model);
         URL url = new URL(baseUrl + "/chat/stream" + query);
 
+        // 파이썬 연결 시키기.
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
-        con.setRequestMethod("GET"); // ✅ GET으로 변경
+        con.setRequestMethod("GET"); // GET으로 변경
         con.setRequestProperty("Accept", "text/event-stream"); // 파이썬과 연결 성공.
 
         // POST Body 전송 코드 삭제 (GET은 Body를 보내지 않음)
         // try (OutputStream os = con.getOutputStream()) { ... }
-        
         int code = con.getResponseCode();
         if (code >= 400) {
             String err = readAll(con.getErrorStream());
@@ -146,7 +140,8 @@ public class PythonClientService {
             }
         }
     }
-
+    
+    //에러 발생시. 그 에러 뭐가 문제인지 파악해줌.
     private String readAll(InputStream is) throws IOException {
         if (is == null) return "";
         try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {

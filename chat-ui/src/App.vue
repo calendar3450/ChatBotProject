@@ -1,8 +1,8 @@
 
 
 <script setup>
+// import { useApp } from './useApp.js'
 import { ref, onMounted, computed, nextTick, reactive } from 'vue'
-
 const documents = ref([])
 const selected = ref(new Set())
 const messages = ref([])
@@ -113,6 +113,10 @@ let es = null
 // 메세지를 챗봇에게 보냄. 
 // 문제는 여기다 할일 적기.
 async function sendStream() {
+  //시작 시간
+  const startTime = Date.now();
+  // 측정용
+
   const q = input.value.trim()
   if (!q || sending.value) return
 
@@ -137,13 +141,44 @@ async function sendStream() {
   // Java 서버의 /chats/stream 엔드포인트로 GET 요청 (DB 저장 후 Python으로 중계)
   es = new EventSource(url)
 
+  // [타이핑 효과] 수신된 텍스트를 임시 저장할 큐
+  const typeQueue = []
+  let isTyping = false
+
+  const processQueue = () => {
+
+    const endTime = Date.now();
+    console.log((endTime - startTime) / 1000)
+
+    if (typeQueue.length > 0) {
+      isTyping = true
+      // 큐에 쌓인 양이 많으면(50자 이상) 한 번에 더 많이 출력하여 속도 조절
+      const speed = typeQueue.length > 50 ? 5 : 1
+      const chunk = typeQueue.splice(0, speed).join('')
+
+      botMsg.text += chunk
+      scrollToBottom()
+      
+      // 20ms마다 다음 글자 출력 (속도 조절 가능)
+      setTimeout(processQueue, 100)
+    } else {
+      isTyping = false
+    }
+  }
+
   //채팅 가져오기
   es.addEventListener('delta', (e) => {
     // Spring에서 data는 JSON 문자열로 오므로 파싱
     const obj = JSON.parse(e.data)
     if (obj.type === 'delta') {
-      botMsg.text += obj.text
-      scrollToBottom()
+      // botMsg.text += obj.text
+      // scrollToBottom()
+      // 즉시 화면에 뿌리지 않고 큐에 담음
+      if (obj.text) {
+        typeQueue.push(...obj.text.split(''))
+        // 타이핑 루프가 돌고 있지 않다면 시작
+        if (!isTyping) processQueue()
+      }
     }
   })
 
@@ -156,6 +191,7 @@ async function sendStream() {
       sending.value = false
       es.close()
       es = null
+      
     }
   })
 
@@ -266,6 +302,16 @@ function statusLabel(s) {
   if (s === 'UPLOADED') return '업로드됨'
   return s || '오류입니다.'
 }
+
+// const {
+//   documents, selected, messages, input, sending,
+//   loadingDocs, docError, chatRef, useGemini, loadingChat, chatError,
+//   selectedDocIds,
+//   loadDocuments, loadMessages, isSelectable, toggleSelect, clearSelection,
+//   onKeydown, sendStream,
+//   uploadBusy, uploadError, uploadFiles, deleteDocument, onPickFiles, reingestDoc,
+//   statusLabel
+// } = useApp()
 
 </script>
 

@@ -37,12 +37,13 @@ public class ChatStreamController {
 
         executor.submit(() -> {
             try {
-                // 1. 사용자 질문 저장
-                chatHistoryService.saveMessage("user", req.getQuestion());
-
-                // 2. 답변 스트리밍 및 완료 시 저장
+                // 1. 답변 스트리밍 및 완료 시 저장
                 pythonClientService.forwardSseToClient(req, emitter, 
-                    (fullAnswer) -> chatHistoryService.saveMessage("assistant", fullAnswer));
+                    (fullAnswer) -> {
+                        // 1) 답변 스트리밍이 완료가 된다면, 바로 질문과 답변 DB저장.
+                        chatHistoryService.saveMessage("user", req.getQuestion());
+                        chatHistoryService.saveMessage("assistant", fullAnswer);
+                    });
                 emitter.complete();
             } catch (Exception e) {
                 try {
