@@ -17,6 +17,11 @@ const useGemini = ref(false) // 모델 선택 토글 (false=Ollama, true=Gemini)
 const loadingChat= ref(false)
 const chatError = ref('')
 
+// 페이징 상태
+const page = ref(0)
+const hasMore = ref(true)
+const loadingHistory = ref(false)
+
 //값을 자동으로 갱신하여 set집합에 데이터를 보냄.
 const selectedDocIds = computed(() => Array.from(selected.value))
 
@@ -55,9 +60,12 @@ async function loadDocuments() {
 async function loadMessages() {
   loadingChat.value = true
   chatError.value = ''
+  page.value = 0
+  hasMore.value = true
+
   try {
-    // Spring GET /chats
-    const res = await fetch('/chats')
+    // Spring GET /chats (첫 페이지 20개)
+    const res = await fetch('/chats?page=0&size=20')
     if (!res.ok) {
       chatError.value = `채팅 목록 에러: ${res.status} ${await res.text()}`
       
@@ -65,8 +73,12 @@ async function loadMessages() {
       return
     }
     const data = await res.json()
+    
+    if (data.length < 20) hasMore.value = false
+
     // 1. DB에 저장된 대화가 있으면 우선적으로 표시
     if (data && data.length > 0) {
+      
       messages.value = data
       scrollToBottom()
     } else if (messages.value.length === 0) {
@@ -81,6 +93,41 @@ async function loadMessages() {
   }
 }
 
+// 과거 메시지 더 불러오기 (무한 스크롤)
+async function loadMoreMessages() {
+  if (!hasMore.value || loadingHistory.value) return
+  
+  loadingHistory.value = true
+  const prevHeight = chatRef.value.scrollHeight
+  
+  try {
+    const nextPage = page.value + 1
+    const res = await fetch(`/chats?page=${nextPage}&size=20`)
+    if (!res.ok) return
+
+    const data = await res.json()
+    if (data.length < 20) hasMore.value = false
+    if (data.length === 0) return
+
+    // 기존 메시지 앞에 과거 메시지 추가
+    messages.value = [...data, ...messages.value]
+    page.value = nextPage
+
+    // 스크롤 위치 유지
+    await nextTick()
+    chatRef.value.scrollTop = chatRef.value.scrollHeight - prevHeight
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+function onScroll(e) {
+  if (e.target.scrollTop === 0) {
+    loadMoreMessages()
+  }
+}
 
 function isSelectable(doc) {
   // 상태가 DONE일 때만 선택 가능하게 (status가 없다면 filePath 존재 여부로 대충 판단)
@@ -160,7 +207,7 @@ async function sendStream() {
       scrollToBottom()
       
       // 20ms마다 다음 글자 출력 (속도 조절 가능)
-      setTimeout(processQueue, 100)
+      setTimeout(processQueue, 40)
     } else {
       isTyping = false
     }
@@ -410,7 +457,7 @@ function statusLabel(s) {
         <div class="meta">선택 문서 IDs: {{ selectedDocIds.join(', ') || '없음' }}</div>
       </header>
 
-      <main class="chat" ref="chatRef">
+      <main class="chat" ref="chatRef" @scroll="onScroll">
         <div v-for="(m, idx) in messages" :key="idx" class="row" :class="m.role">
           <div class="bubble">
             <div class="text">{{ m.text }}</div>
