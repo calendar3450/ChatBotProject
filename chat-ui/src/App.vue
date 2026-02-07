@@ -1,5 +1,4 @@
 
-
 <script setup>
 // import { useApp } from './useApp.js'
 import { ref, onMounted, computed, nextTick, reactive } from 'vue'
@@ -27,7 +26,8 @@ const selectedDocIds = computed(() => Array.from(selected.value))
 
 // 답변이 오면 스크롤이 내려감.
 async function scrollToBottom() {
-  await nextTick() //Promise 체이닝 기법
+  await nextTick() //Promise 체이닝 기법.
+  
   const curScroll = chatRef.value
   if (!curScroll) return
   curScroll.scrollTo({ top: curScroll.scrollHeight + 100, behavior: 'smooth' })
