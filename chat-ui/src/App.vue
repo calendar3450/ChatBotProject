@@ -451,7 +451,7 @@ function statusLabel(s) {
           <div class="title">Doc Chat</div>
           <label class="model-toggle">
             <input type="checkbox" v-model="useGemini">
-            <span class="toggle-text">{{ useGemini ? 'Gemini' : 'Ollama' }}</span>
+            <span class="toggle-text">{{ useGemini ? 'Gemini' : 'Qwen3' }}</span>
           </label>
         </div>
         <div class="meta">선택 문서 IDs: {{ selectedDocIds.join(', ') || '없음' }}</div>

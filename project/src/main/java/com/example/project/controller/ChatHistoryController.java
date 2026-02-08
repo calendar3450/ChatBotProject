@@ -3,6 +3,7 @@ package com.example.project.controller;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -13,14 +14,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.project.controller.dto.ChatResponse;
 import com.example.project.repository.ChatMessageRepository;
+import com.example.project.service.ChatHistoryService;
 
 @RestController
 public class ChatHistoryController {
 
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatHistoryService chatHistoryService;
 
-    public ChatHistoryController(ChatMessageRepository chatMessageRepository) {
+    public ChatHistoryController(ChatMessageRepository chatMessageRepository, ChatHistoryService chatHistoryService) {
         this.chatMessageRepository = chatMessageRepository;
+        this.chatHistoryService = chatHistoryService;
     }
     
     // 챗 기록들 가져오기.
@@ -39,5 +43,11 @@ public class ChatHistoryController {
         List<ChatResponse> reversed = new ArrayList<>(list);
         Collections.reverse(reversed);
         return reversed;
+    }
+
+    // Python 서버가 호출할 API: 최근 대화 기록을 프롬프트용 포맷으로 반환
+    @GetMapping("/chats/history")
+    public List<Map<String, String>> getHistoryForPrompt(@RequestParam(name = "limit", defaultValue = "10") int limit) {
+        return chatHistoryService.getRecentMessagesForPrompt(limit);
     }
 }

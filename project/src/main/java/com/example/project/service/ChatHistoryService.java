@@ -1,5 +1,13 @@
 package com.example.project.service;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.example.project.domain.ChatMessage;
@@ -20,5 +28,25 @@ public class ChatHistoryService {
         msg.setRole(role);
         msg.setContent(content);
         chatMessageRepository.save(msg);
+
+    }
+
+    // 최근 대화 내용을 가져와서 Python 서버에 보낼 형식(List<Map>)으로 변환
+    public List<Map<String, String>> getRecentMessagesForPrompt(int limit) {
+        // 1. DB에서 최신순으로 limit개 가져오기 (createdAt 기준 내림차순)
+        Pageable pageable = PageRequest.of(0, limit, Sort.by("createdAt").descending());
+        List<ChatMessage> messages = chatMessageRepository.findAll(pageable).getContent();
+
+        // 2. 과거 -> 최신 순으로 정렬 (LLM 문맥 유지를 위해 뒤집기)
+        List<ChatMessage> reversed = new ArrayList<>(messages);
+        Collections.reverse(reversed);
+
+        // 3. Map 형태로 변환 (Python: [{"role": "user", "content": "..."}, ...])
+        return reversed.stream().map(msg -> {
+            Map<String, String> map = new HashMap<>();
+            map.put("role", msg.getRole());
+            map.put("content", msg.getContent());
+            return map;
+        }).toList();
     }
 }

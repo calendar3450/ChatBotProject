@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import pdfplumber
 from pathlib import Path
@@ -23,6 +23,7 @@ app = FastAPI()
 # ✅ 임베딩 모델 (멀티링구얼)
 # e5 계열은 query에 "query: ", 문서에 "passage: " prefix 권장
 EMBED_MODEL_NAME = "intfloat/multilingual-e5-base"
+# RTX 5070 호환성 문제가 해결될 때까지 임시로 CPU 사용 (임베딩은 CPU로도 충분히 빠름)
 embed_model = SentenceTransformer(EMBED_MODEL_NAME, device="cpu")
 
 DATA_DIR = Path("data")
@@ -30,6 +31,7 @@ DATA_DIR.mkdir(exist_ok=True)
 
 OLLAMA_BASE = "http://localhost:11434"
 OLLAMA_MODEL = "qwen3-vl:8b"
+SPRING_BOOT_URL = "http://localhost:8080"
 
 # # 테스트용.
 # class PingResponse(BaseModel):
@@ -59,10 +61,22 @@ class ChatRequest(BaseModel):
     top_k : int = 3
     per_doc : int = 3
     model: str = "ollama" # "ollama" or "gemini"
+    
 
 class ChatResponse(BaseModel):
     answer: str
     citations: list[dict]
+
+class HistoryMessage(BaseModel):
+    role: str
+    content: str
+
+class StreamChatRequest(BaseModel):
+    document_ids: list[int] = [0]
+    question: str
+    top_k: int = 3
+    model: str = "ollama"  # "ollama" or "gemini"
+    history: list[HistoryMessage] = []
 
 
 def extract_pdf_text(file_path: str):
@@ -126,7 +140,7 @@ def chunk_pages(pages, chunk_chars,overlap):
 def embed_passages(texts):
     # e5는 passage prefix 권장
     inputs = [f"passage: {t}" for t in texts]
-    vecs = embed_model.encode(inputs, normalize_embeddings=True, device="cpu")
+    vecs = embed_model.encode(inputs, normalize_embeddings=True)
     return np.array(vecs, dtype="float32")
 
 def embed_query(q):
@@ -216,13 +230,17 @@ def build_rag_context(question: str, document_ids: list[int], top_k: int):
     return context, citations
 
 # ✅ RAG 프롬프트 생성 함수 (공통 사용)
-def build_rag_prompt(question: str, context: str):
+def build_rag_prompt(question: str, context: str, history_text: str = ""):
     return f"""당신은 업로드된 PDF 문서의 내용에 근거해 답하는 어시스턴트입니다.
 
 규칙:
 0) 답변은 한국어로만 작성하세요.
 1) 문서 [근거]가 질문에 대한 분석적 추론을 시작하기에 '적절한 정보'를 담고 있는지 판정하세요.
 2 마지막에 "추가로 있으면 좋은 데이터" 3가지를 제안하세요.
+3) 이전의 채팅 기록으로 보고 답변 해주셔도 상관없습니다.
+
+[이전 대화]
+{history_text}
 
 [질문]
 {question}
@@ -239,6 +257,23 @@ def build_rag_prompt(question: str, context: str):
 [답변]
 """
 
+# Spring Boot에서 채팅 기록을 가져오는 헬퍼 함수 (내부 사용)
+def fetch_chat_history_text(limit: int = 20) -> str:
+    history_text = ""
+    try:
+        # Spring Boot의 /chats/history API 호출
+        resp = requests.get(f"{SPRING_BOOT_URL}/chats/history", params={"limit": limit}, timeout=2)
+        if resp.status_code == 200:
+            for msg in resp.json():
+                role = "User" if msg.get("role") == "user" else "Assistant"
+                content = msg.get("content", "")
+                history_text += f"{role}: {content}\n"
+       
+    except Exception as e:
+        print(f"History fetch failed: {e}")
+
+    return history_text
+
 
 # 받고나서 파일읽고(extract_pdf_text) -> 텍스트 분할하고(chunk_pages) -> 벡터화(embed_passages) -> 저장(save_doc_store):.
 @app.post("/ingest", response_model=IngestResponse)
@@ -248,7 +283,7 @@ def ingest(req: IngestRequest):
         # 텍스트가 거의 없으면 스캔본일 가능성
         total_chars = sum(len(p["text"]) for p in pages)
         if total_chars < 50:
-            raise HTTPException(status_code=400, detail="PDF text is empty. (Maybe scanned PDF. OCR needed.)")
+            raise HTTPException(status_code=400, detail="PDF파일의 텍스트를 읽을수가 없습니다.")
 
         chunks = chunk_pages(pages, chunk_chars=800, overlap=120)
         texts = [c["text"] for c in chunks]
@@ -262,7 +297,7 @@ def ingest(req: IngestRequest):
             received=True,
             extracted_chars=total_chars,
             page_count=len(pages),
-            message=f"Ingested: {len(chunks)} chunks saved + embeddings indexed"
+            message=f"Ingested: {len(chunks)}의 청크들을 저장했습니다."
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -283,6 +318,9 @@ def sse_event(data: dict, event: str = "message") -> str:
 
 @app.get("/chat/stream")
 def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "ollama"):
+    # 테스트용 시간 측정 시작
+    start = time.time()
+
     # docIds는 "1,2" 처럼 콤마로 구분된 문자열로 옴. 우선 첫 번째 ID만 사용하도록 처리
     try:
         first_id = int(docIds.split(",")[0])
@@ -303,13 +341,20 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
         prompt = ""
 
         try:
+            # 0) Spring Boot에서 채팅 기록 가져오기 (Pull 방식)
+            # 함수를 호출하여 깔끔하게 처리
+            history_text = fetch_chat_history_text(limit=20)
+
             # --- 2) 프롬프트 및 컨텍스트 구성 ---
             if req.document_id == 0:
                 # [일반 대화]
                 if req.model == 'gemini':
                     prompt = f"""당신은 유용한 한국어 어시스턴트입니다.
-                    반드시 한국어로만 답변하세요.
+                    반드시 한국어로만 답변하세요. 이전 대화 보고 답변을 추론 하셔도 됩니다.
                     
+                    [이전 대화]
+                    {history_text}
+
                     [질문]
                     {req.question}
                     """
@@ -317,7 +362,11 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
                     prompt = f""" 당신은 유용한 한국어 어시스턴트입니다.
                         반드시 한국어로만 답변하세요. 중국어 언어는 절대 사용하지 마세요.
                         사용자의 질문에 정확하고 간결하게 답하세요. 모르면 모른다고 하세요.
-                                    
+                        이전 대화 보고 답변을 추론 하셔도 됩니다.
+                    
+                    [이전 대화]
+                    {history_text}
+
                     [질문]
                     {req.question}
                     [답변]
@@ -325,7 +374,8 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
             else:
                 # [RAG 대화]
                 context, citations = build_rag_context(req.question, [req.document_id], req.top_k)
-                prompt = build_rag_prompt(req.question, context)
+                prompt = build_rag_prompt(req.question, context, history_text)
+                print(prompt)
 
             # --- 3) 모델 호출 및 스트리밍 전송 ---
             if req.model == 'gemini':
@@ -342,7 +392,8 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
             
             # --- 4) 종료 이벤트 (citations 포함) ---
             yield sse_event({"type": "end", "citations": citations}, event="meta")
-
+            
+            print("걸린시간: ", time.time() - start)
         except FileNotFoundError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
