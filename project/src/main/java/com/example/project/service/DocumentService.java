@@ -110,5 +110,27 @@ public class DocumentService {
         //파일 제거
          Document d = documentRepository.findById(documentId).orElseThrow(() -> new IllegalArgumentException("문서가 없습니다." + documentId));
          documentRepository.delete(d);
+
+         // 서버내 업로드 pdf 파일 제거
+         Path target = Path.of(d.getFilePath());
+         System.out.println("파일 위치: " + target);
+         try {
+            Files.deleteIfExists(target);
+         } catch (IOException e) {
+            System.err.println("파일 삭제 실패: " + e.getMessage());
+         }
+
+         // 서버 내 데이터 청크 벡터 제거
+         Path rootPath = Path.of(System.getProperty("user.dir"));
+         Path dataPath = rootPath.resolve("data").resolve("doc_"+ documentId);
+         try {
+            Files.deleteIfExists(dataPath.resolve("chunks.json"));
+            Files.deleteIfExists(dataPath.resolve("index.faiss"));
+            Files.deleteIfExists(dataPath); // 폴더 삭제 (비어있어야 삭제됨)
+            
+         } catch (IOException e) {
+            System.err.println("벡터 데이터 삭제 실패: " + e.getMessage());
+         }
+        
     }
 }

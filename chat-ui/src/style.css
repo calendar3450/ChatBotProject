@@ -1,5 +1,6 @@
 
 /* 전체 레이아웃 */
+body { margin: 0; padding: 0; overflow: hidden; }
 .app { height: 100vh; display: grid; grid-template-columns: 320px 1fr; background: #0f0f10; color: #eaeaea; }
 
 /* 사이드바 */

@@ -45,6 +45,7 @@ async function loadDocuments() {
       return
     }
     const data = await res.json()
+
     // createdAt 내림차순(있을 때만)
     data.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     documents.value = data
@@ -272,16 +273,23 @@ async function uploadFiles(fileList) {
   for (const f of fileList) {
     formData.append('files', f)   // key 이름: "files"
   }
-
+   
+  // 문서 목록 갱신
+  await loadDocuments()
+  
   uploadBusy.value = true
+
   try {
     const res = await fetch('/documents/uploads', {
       method: 'POST',
       body: formData,
     })
+    
 
     if (!res.ok) {
-      uploadError.value = `업로드 에러: ${res.status}\n${await res.text()}`
+      // 질문하신 Java 에러 로그는 여기서 출력됩니다 (서버 응답 에러)
+      uploadError.value = `업로드 에러: ${res.status}\n 현재 문제가 생겨서 새로고침 해주세요.`
+      await loadDocuments()
       return
     }
 
@@ -293,6 +301,7 @@ async function uploadFiles(fileList) {
 
     // 문서 목록 갱신
     await loadDocuments()
+    
   } catch (e) {
     uploadError.value = `업로드 요청 실패: ${String(e)}`
   } finally {
@@ -308,7 +317,7 @@ async function deleteDocument(id) {
     // deleteMapping이므로 method는 DELETE로 설정.
     const res = await fetch(`/documents/${id}/delete`, { method: 'DELETE' })
     if (!res.ok) {
-      alert(`삭제 실패: ${res.status}\n${await res.text()}`)
+      alert(`삭제 실패: ${res.status}\n 다시 시도해 주세요`)
       return
     }
     // 목록 갱신 및 선택 해제
@@ -491,14 +500,3 @@ function statusLabel(s) {
     </section>
   </div>
 </template>
-
-<style>
-body { margin: 0; padding: 0; overflow: hidden; }
-
-
-
-</style>
-
-<!-- <style scoped>
-
-</style> -->
