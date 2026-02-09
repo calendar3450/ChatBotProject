@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class DocumentService {
         this.pythonClientService = pythonClientService;
     }
 
+    // 문서생성 및 업로드
     public Document create(String title) {
         Document d = new Document();
         d.setTitle(title);
@@ -37,6 +39,7 @@ public class DocumentService {
         return documentRepository.save(d);
     }
 
+    //파일 업로드
     public Document uploadFile(Long documentId, MultipartFile file) throws IOException {
         Document d = documentRepository.findById(documentId).orElseThrow(() -> new IllegalArgumentException("문서가 없습니다." + documentId));
         
@@ -62,17 +65,35 @@ public class DocumentService {
         d = documentRepository.save(d);
         Document saved = documentRepository.save(d);
 
-        try {
-            var resp = pythonClientService.ingestDocument(saved);
-            System.out.println(" Python ingest 응답: " + resp);
-            d.setStatus(DocumentStatus.DONE);
-            d = documentRepository.save(d);
-        } catch (Exception e) {
-            // 파이썬 서버가 꺼져 있어도 업로드 자체는 실패시키고 싶지 않다면, 여기서만 로그 찍고 무시
-            System.err.println("Python ingest 호출 실패: " + e.getMessage());
-            d.setStatus(DocumentStatus.FAILED);
-            d = documentRepository.save(d);
-        }
+        // // 문서 임베딩 시작
+        // try {
+        //     var resp = pythonClientService.ingestDocument(saved);
+        //     System.out.println(" Python ingest 응답: " + resp);
+        //     d.setStatus(DocumentStatus.DONE);
+        //     d = documentRepository.save(d);
+        // } catch (Exception e) {
+        //     // 파이썬 서버가 꺼져 있어도 업로드 자체는 실패시키고 싶지 않다면, 여기서만 로그 찍고 무시
+        //     System.err.println("Python ingest 호출 실패: " + e.getMessage());
+        //     d.setStatus(DocumentStatus.FAILED);
+        //     d = documentRepository.save(d);
+        // }
+
+
+        // [비동기 처리] 응답을 바로 반환하기 위해 인덱싱은 백그라운드 스레드에서 실행
+        // 배포 시 타임아웃 방지를 위해 필수적인 패턴입니다.
+        //CompletableFutre.runAsync를 넣음오르써 비동기 작업이 되는것.
+        CompletableFuture.runAsync(() -> {
+            try {
+                var resp = pythonClientService.ingestDocument(saved);
+                System.out.println(" Python ingest 응답: " + resp);
+                saved.setStatus(DocumentStatus.DONE);
+                documentRepository.save(saved);
+            } catch (Exception e) {
+                System.err.println("Python ingest 호출 실패: " + e.getMessage());
+                saved.setStatus(DocumentStatus.FAILED);
+                documentRepository.save(saved);
+            }
+        });
 
         return saved;
     
@@ -105,6 +126,7 @@ public class DocumentService {
 
     return documentRepository.save(d);
 }
+
     //파일 하나씩 제거.
     public void delete(Long documentId) {
         //파일 제거
@@ -127,7 +149,7 @@ public class DocumentService {
             Files.deleteIfExists(dataPath.resolve("chunks.json"));
             Files.deleteIfExists(dataPath.resolve("index.faiss"));
             Files.deleteIfExists(dataPath); // 폴더 삭제 (비어있어야 삭제됨)
-            
+
          } catch (IOException e) {
             System.err.println("벡터 데이터 삭제 실패: " + e.getMessage());
          }

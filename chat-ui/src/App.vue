@@ -15,6 +15,7 @@ const chatRef = ref(null)
 const useGemini = ref(false) // 모델 선택 토글 (false=Ollama, true=Gemini)
 const loadingChat= ref(false)
 const chatError = ref('')
+const isScollOK = ref(true);
 
 // 페이징 상태
 const page = ref(0)
@@ -23,6 +24,7 @@ const loadingHistory = ref(false)
 
 //값을 자동으로 갱신하여 set집합에 데이터를 보냄.
 const selectedDocIds = computed(() => Array.from(selected.value))
+
 
 // 답변이 오면 스크롤이 내려감.
 async function scrollToBottom() {
@@ -34,8 +36,8 @@ async function scrollToBottom() {
 }
 
 /** 문서 목록 로딩 */
-async function loadDocuments() {
-  loadingDocs.value = true
+async function loadDocuments(isBackground = false) {
+  if (!isBackground) loadingDocs.value = true
   docError.value = ''
   try {
     const res = await fetch('/documents')
@@ -46,6 +48,11 @@ async function loadDocuments() {
     }
     const data = await res.json()
 
+    // [Smart Polling] '인덱싱 중'인 문서가 하나라도 있으면 2초 뒤에 조용히 다시 조회
+    if (data.some(d => d.status === 'PROCESSING')) {
+      setTimeout(() => loadDocuments(true), 2000)
+    }
+
     // createdAt 내림차순(있을 때만)
     data.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     documents.value = data
@@ -53,7 +60,7 @@ async function loadDocuments() {
     docError.value = `문서 목록 요청 실패: ${String(e)}`
     documents.value = []
   } finally {
-    loadingDocs.value = false
+    if (!isBackground) loadingDocs.value = false
   }
 }
 
@@ -130,6 +137,11 @@ function onScroll(e) {
   }
 }
 
+function onWheel() {
+  // 마우스 휠이 감지되면 자동 스크롤 중지
+  isScollOK.value = false
+}
+
 function isSelectable(doc) {
   // 상태가 DONE일 때만 선택 가능하게 (status가 없다면 filePath 존재 여부로 대충 판단)
   if (doc.status) return doc.status === 'DONE'
@@ -168,13 +180,18 @@ async function sendStream() {
   const q = input.value.trim()
   if (!q || sending.value) return
 
+  // 새 메시지를 보낼 때는 다시 자동 스크롤 활성화
+  isScollOK.value = true
   messages.value.push({ role: 'user', text: q })
   input.value = ''
 
   const botMsg = reactive({ role: 'assistant', text: '', loading: true, citations: [] })
   messages.value.push(botMsg)
   sending.value = true
-  await scrollToBottom()
+
+  if (isScollOK.value) {
+    await scrollToBottom()
+  }
 
   // 기존 연결 있으면 닫기
   if (es) { es.close(); es = null }
@@ -205,7 +222,11 @@ async function sendStream() {
       const chunk = typeQueue.splice(0, speed).join('')
 
       botMsg.text += chunk
-      scrollToBottom()
+      
+      if (isScollOK.value) {
+        scrollToBottom()
+      }
+      
       
       // 20ms마다 다음 글자 출력 (속도 조절 가능)
       setTimeout(processQueue, 40)
@@ -466,7 +487,7 @@ function statusLabel(s) {
         <div class="meta">선택 문서 IDs: {{ selectedDocIds.join(', ') || '없음' }}</div>
       </header>
 
-      <main class="chat" ref="chatRef" @scroll="onScroll">
+      <main class="chat" ref="chatRef" @scroll="onScroll" @wheel="onWheel">
         <div v-for="(m, idx) in messages" :key="idx" class="row" :class="m.role">
           <div class="bubble">
             <div class="text">{{ m.text }}</div>
