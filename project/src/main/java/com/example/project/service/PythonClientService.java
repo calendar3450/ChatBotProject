@@ -64,7 +64,8 @@ public class PythonClientService {
 
     PythonChatRequest req = new PythonChatRequest(documentId, question, topK == null ? 5 : topK);
 
-    Map<String, Object> response = restTemplate.postForObject(url, req, java.util.Map.class);
+    // 파이썬 서버로 요청 url = 파이썬 app.post(), req = 요청 데이터.
+    Map<String, Object> response = restTemplate.postForObject(url, req, Map.class);
     return response;
     }   
     

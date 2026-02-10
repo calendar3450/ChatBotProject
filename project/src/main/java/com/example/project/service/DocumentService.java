@@ -62,7 +62,6 @@ public class DocumentService {
         //DB 업데이트
         d.setFilePath(target.toString());
         d.setStatus(DocumentStatus.PROCESSING);
-        d = documentRepository.save(d);
         Document saved = documentRepository.save(d);
 
         // // 문서 임베딩 시작
@@ -79,7 +78,7 @@ public class DocumentService {
         // }
 
 
-        // [비동기 처리] 응답을 바로 반환하기 위해 인덱싱은 백그라운드 스레드에서 실행
+        // [비동기 처리] 응답을 바로 반환하기 위해 인덱싱은 백그라운드 스레드에서 실행 문서작업 비동기 처리
         // 배포 시 타임아웃 방지를 위해 필수적인 패턴입니다.
         //CompletableFutre.runAsync를 넣음오르써 비동기 작업이 되는것.
         CompletableFuture.runAsync(() -> {
