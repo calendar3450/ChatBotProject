@@ -12,6 +12,9 @@ public class Document {
     @GeneratedValue(strategy = GenerationType.IDENTITY) // 자동증가 하는 방식.
     private Long id;
 
+    @Column (nullable = false)
+    private String userId;
+
     @Column(nullable = false, length = 200)
     private String title;
 
@@ -28,6 +31,8 @@ public class Document {
 
     @Column(nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    
 
     
 
@@ -64,6 +69,12 @@ public class Document {
         this.createdAt = createdAt;
     }
 
+    public String getUserId() {
+        return userId;
+    }
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
 
     
 }

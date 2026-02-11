@@ -25,6 +25,13 @@ const loadingHistory = ref(false)
 //값을 자동으로 갱신하여 set집합에 데이터를 보냄.
 const selectedDocIds = computed(() => Array.from(selected.value))
 
+// 유저 스토리지 저장
+let userId = localStorage.getItem('userId')
+// 새로운 유저라면, 생성.
+if (!userId) {
+  userId = crypto.randomUUID()
+  localStorage.setItem('userId', userId)
+}
 
 // 답변이 오면 스크롤이 내려감.
 async function scrollToBottom() {
@@ -33,6 +40,57 @@ async function scrollToBottom() {
   const curScroll = chatRef.value
   if (!curScroll) return
   curScroll.scrollTo({ top: curScroll.scrollHeight + 100, behavior: 'smooth' })
+}
+
+
+const uploadBusy = ref(false)
+const uploadError = ref('')
+
+// 파일 업로드
+async function uploadFiles(fileList,userId) {
+  uploadError.value = ''
+  if (!fileList || fileList.length === 0) return
+
+  const formData = new FormData()
+  for (const f of fileList) {
+    formData.append('files', f)   // key 이름: "files"
+    formData.append('userId', userId)
+  }
+   
+  // 문서 목록 갱신
+  await loadDocuments()
+  
+  uploadBusy.value = true
+  console.log(formData.get('userId'))
+
+  try {
+    const res = await fetch('/documents/uploads', {
+      method: 'POST',
+      body: formData,
+    })
+    
+
+    if (!res.ok) {
+      // 질문하신 Java 에러 로그는 여기서 출력됩니다 (서버 응답 에러)
+      uploadError.value = `업로드 에러: ${res.status}\n 현재 문제가 생겨서 새로고침 해주세요.`
+      await loadDocuments()
+      return
+    }
+
+    const data = await res.json() // 업로드된 문서 리스트
+    // 업로드된 문서들을 자동 선택
+    const s = new Set(selected.value)
+    for (const d of data) s.add(d.id)
+    selected.value = s
+
+    // 문서 목록 갱신
+    await loadDocuments()
+    
+  } catch (e) {
+    uploadError.value = `업로드 요청 실패: ${String(e)}`
+  } finally {
+    uploadBusy.value = false
+  }
 }
 
 /** 문서 목록 로딩 */
@@ -137,8 +195,8 @@ function onScroll(e) {
   }
 }
 
-function onWheel() {
-  // 마우스 휠이 감지되면 자동 스크롤 중지
+// 마우스 휠이 감지되면 자동 스크롤 중지
+function onWheel() {  
   isScollOK.value = false
 }
 
@@ -282,53 +340,6 @@ onMounted(() => {
   timer = setInterval(loadDocuments, 300000) // 300초마다 갱신
 })
 
-const uploadBusy = ref(false)
-const uploadError = ref('')
-
-// 파일 업로드
-async function uploadFiles(fileList) {
-  uploadError.value = ''
-  if (!fileList || fileList.length === 0) return
-
-  const formData = new FormData()
-  for (const f of fileList) {
-    formData.append('files', f)   // key 이름: "files"
-  }
-   
-  // 문서 목록 갱신
-  await loadDocuments()
-  
-  uploadBusy.value = true
-
-  try {
-    const res = await fetch('/documents/uploads', {
-      method: 'POST',
-      body: formData,
-    })
-    
-
-    if (!res.ok) {
-      // 질문하신 Java 에러 로그는 여기서 출력됩니다 (서버 응답 에러)
-      uploadError.value = `업로드 에러: ${res.status}\n 현재 문제가 생겨서 새로고침 해주세요.`
-      await loadDocuments()
-      return
-    }
-
-    const data = await res.json() // 업로드된 문서 리스트
-    // 업로드된 문서들을 자동 선택
-    const s = new Set(selected.value)
-    for (const d of data) s.add(d.id)
-    selected.value = s
-
-    // 문서 목록 갱신
-    await loadDocuments()
-    
-  } catch (e) {
-    uploadError.value = `업로드 요청 실패: ${String(e)}`
-  } finally {
-    uploadBusy.value = false
-  }
-}
 
 // 파일 삭제
 async function deleteDocument(id) {
@@ -352,7 +363,7 @@ async function deleteDocument(id) {
 
 function onPickFiles(e) {
   const files = e.target.files
-  uploadFiles(files)
+  uploadFiles(files,userId)
   // 같은 파일 다시 선택 가능하도록 input reset
   e.target.value = ''
 }

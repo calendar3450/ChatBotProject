@@ -14,6 +14,7 @@ public class ChatRequest {
     private String question;
     private Integer topK = 5;
     private String model = "qwen3-vl:8b";
+    private String userId;
 
 
     // public static void ChatRequest from (ChatMessage msg) {
@@ -36,4 +37,8 @@ public class ChatRequest {
 
     public String getModel() {return model;}
     public void setModel(String model) {this.model = model;}
+
+    public String getUserId() {return userId;}
+    public void setUserId(String userId) {this.userId = userId;}
+    
 }

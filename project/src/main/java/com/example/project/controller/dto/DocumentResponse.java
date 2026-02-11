@@ -12,6 +12,8 @@ public class DocumentResponse {
     private String filePath;
     private DocumentStatus status;
     private LocalDateTime createAt;
+    private String userId;
+
 
     public static DocumentResponse from (Document d) {
         DocumentResponse r = new DocumentResponse();
@@ -20,6 +22,7 @@ public class DocumentResponse {
         r.filePath = d.getFilePath();
         r.status = d.getStatus() == null ? null : d.getStatus();
         r.createAt = d.getCreatedAt() == null ? null : d.getCreatedAt();
+        r.userId = d.getUserId(); 
         return r;
     }
     
@@ -41,5 +44,9 @@ public class DocumentResponse {
 
     public LocalDateTime getCreateAt() {
         return createAt;
+    }
+
+    public String getUserId() {
+        return userId;
     }
 }

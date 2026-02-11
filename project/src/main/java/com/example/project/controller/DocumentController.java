@@ -34,12 +34,16 @@ public class DocumentController {
     }
 
     @GetMapping("/documents")
-    public List<DocumentResponse> list() {
+    public List<DocumentResponse> list(@RequestParam(value = "userId", required = false) String userId)
+     {
         return documentRepository.findAll()
             .stream()
+            // userId가 파라미터로 왔다면 해당 유저의 문서만 필터링 (없으면 전체 조회)
+            .filter(doc -> userId == null || userId.equals(doc.getUserId()))
             .map(DocumentResponse::from)
             .toList();
     }
+
     // legacy 코드
     // @PostMapping("/documents")
     // public DocumentResponse create(@Valid @RequestBody DocumentCreateRequest req) {
@@ -64,16 +68,20 @@ public class DocumentController {
 
     //파일 업로드
     @PostMapping("/documents/uploads")
-    public List<DocumentResponse> uploadMany (@RequestParam("files") List<MultipartFile> files) throws IOException{
+    public List<DocumentResponse> uploadMany (@RequestParam("files") List<MultipartFile> files,
+                                              @RequestParam("userId") List<String> userIds) throws IOException{
         if (files == null || files.isEmpty()) {
             throw new IllegalArgumentException("파일이 없습니다.");
         
         }
         List<DocumentResponse> results = new ArrayList<>();
+        // 파일을 2개이상 보낼때, 유저 id도 2개 이상씩 나오니, 그중 1개 맨 앞의 리스트값 사용.
+        String userId = userIds.isEmpty() ? null : userIds.get(0);
+        
         for (MultipartFile f : files) {
             String original = (f.getOriginalFilename() == null) ? "untitled.pdf" : f.getOriginalFilename();
             String title = original;
-            Document d = documentService.createAndUpload(title, f);
+            Document d = documentService.createAndUpload(title, f, userId);
             results.add(DocumentResponse.from(d));
         }
 

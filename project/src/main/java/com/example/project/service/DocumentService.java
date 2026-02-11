@@ -32,8 +32,9 @@ public class DocumentService {
     }
 
     // 문서생성 및 업로드
-    public Document create(String title) {
+    public Document create(String title , String userId) {
         Document d = new Document();
+        d.setUserId(userId);
         d.setTitle(title);
         d.setStatus(DocumentStatus.UPLOADED);
         return documentRepository.save(d);
@@ -64,20 +65,6 @@ public class DocumentService {
         d.setStatus(DocumentStatus.PROCESSING);
         Document saved = documentRepository.save(d);
 
-        // // 문서 임베딩 시작
-        // try {
-        //     var resp = pythonClientService.ingestDocument(saved);
-        //     System.out.println(" Python ingest 응답: " + resp);
-        //     d.setStatus(DocumentStatus.DONE);
-        //     d = documentRepository.save(d);
-        // } catch (Exception e) {
-        //     // 파이썬 서버가 꺼져 있어도 업로드 자체는 실패시키고 싶지 않다면, 여기서만 로그 찍고 무시
-        //     System.err.println("Python ingest 호출 실패: " + e.getMessage());
-        //     d.setStatus(DocumentStatus.FAILED);
-        //     d = documentRepository.save(d);
-        // }
-
-
         // [비동기 처리] 응답을 바로 반환하기 위해 인덱싱은 백그라운드 스레드에서 실행 문서작업 비동기 처리
         // 배포 시 타임아웃 방지를 위해 필수적인 패턴입니다.
         //CompletableFutre.runAsync를 넣음오르써 비동기 작업이 되는것.
@@ -99,8 +86,8 @@ public class DocumentService {
     }
 
     //파일 한번에 id 만들어서 바로 전송.
-    public Document createAndUpload (String title, MultipartFile file) throws IOException {
-        Document d = create(title);
+    public Document createAndUpload (String title, MultipartFile file, String userId) throws IOException {
+        Document d = create(title,userId);
         return uploadFile(d.getId(), file);
     }
 
