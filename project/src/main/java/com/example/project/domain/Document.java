@@ -2,7 +2,14 @@ package com.example.project.domain;
 
 import java.time.LocalDateTime;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "documents")
@@ -12,7 +19,7 @@ public class Document {
     @GeneratedValue(strategy = GenerationType.IDENTITY) // 자동증가 하는 방식.
     private Long id;
 
-    @Column (nullable = false)
+    @Column (nullable = true)
     private String userId;
 
     @Column(nullable = false, length = 200)

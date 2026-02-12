@@ -52,7 +52,7 @@ public class PythonClientService {
     }
 
     //파이썬 chat post로 이동.
-    public Map<String, Object> chat(List<Long> documentIds, String question, Integer topK) {
+    public Map<String, Object> chat(List<Long> documentIds, String question, Integer topK, String document_name) {
     String url = baseUrl + "/chat";
 
     // 파이썬 서버가 document_id를 단일 int로 요구합니다.
@@ -62,7 +62,7 @@ public class PythonClientService {
             ? 0L 
             : documentIds.get(0);
 
-    PythonChatRequest req = new PythonChatRequest(documentId, question, topK == null ? 5 : topK);
+    PythonChatRequest req = new PythonChatRequest(documentId, question, topK == null ? 5 : topK, document_name);
 
     // 파이썬 서버로 요청 url = 파이썬 app.post(), req = 요청 데이터.
     Map<String, Object> response = restTemplate.postForObject(url, req, Map.class);

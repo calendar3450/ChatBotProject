@@ -7,6 +7,8 @@ import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,9 +16,6 @@ import com.example.project.controller.dto.DocumentResponse;
 import com.example.project.domain.Document;
 import com.example.project.repository.DocumentRepository;
 import com.example.project.service.DocumentService;
-
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 
 
@@ -33,13 +32,13 @@ public class DocumentController {
 
     }
 
-    @GetMapping("/documents")
-    public List<DocumentResponse> list(@RequestParam(value = "userId", required = false) String userId)
-     {
+    @GetMapping("/documents/{userId}")
+    public List<DocumentResponse> list(@PathVariable(value = "userId") String userId)
+    {
         return documentRepository.findAll()
             .stream()
             // userId가 파라미터로 왔다면 해당 유저의 문서만 필터링 (없으면 전체 조회)
-            .filter(doc -> userId == null || userId.equals(doc.getUserId()))
+            .filter(doc -> userId.equals(doc.getUserId()))
             .map(DocumentResponse::from)
             .toList();
     }

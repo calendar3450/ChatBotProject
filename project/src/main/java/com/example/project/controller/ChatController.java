@@ -25,7 +25,7 @@ public class ChatController {
     // 매써드
     @PostMapping("/chat")
     public Map<String, Object> chat(@Valid @RequestBody ChatRequest req) {
-        return pythonClientService.chat(req.getDocumentIds(), req.getQuestion(), req.getTopK());
+        return pythonClientService.chat(req.getDocumentIds(), req.getQuestion(), req.getTopK(),req.getDocumentName());
     }
 
 }

@@ -15,16 +15,7 @@ public class ChatRequest {
     private Integer topK = 5;
     private String model = "qwen3-vl:8b";
     private String userId;
-
-
-    // public static void ChatRequest from (ChatMessage msg) {
-    //     ChatRequest c = new ChatRequest();
-    //     c.documentIds = msg.getDocumentIds();
-    //     c.question = msg.getQuestion();
-    //     c.topK = msg.getTopK();
-    //     c.model = msg.getModel();
-    //     return c;
-    // }
+    private String documentName;
 
     public List<Long> getDocumentIds() { return documentIds; }
     public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
@@ -40,5 +31,8 @@ public class ChatRequest {
 
     public String getUserId() {return userId;}
     public void setUserId(String userId) {this.userId = userId;}
+
+    public String getDocumentName() {return documentName;}
+    public void setDocumentName(String documentName) {this.documentName = documentName;}
     
 }

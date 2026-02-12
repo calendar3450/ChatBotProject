@@ -61,6 +61,7 @@ class ChatRequest(BaseModel):
     top_k : int = 3
     per_doc : int = 3
     model: str = "ollama" # "ollama" or "gemini"
+    document_name: str = ""
     
 
 class ChatResponse(BaseModel):
@@ -195,7 +196,7 @@ def ollama_generate(prompt: str) -> str:
     return (data.get("response") or "").strip()
 
 # RAG 검색 및 컨텍스트 생성 함수
-def build_rag_context(question: str, document_ids: list[int], top_k: int):
+def build_rag_context(question: str, document_ids: list[int], top_k: int, document_name: str):
     qv = embed_query(question)
     real_top_k = max(1, min(top_k, 5))
 
@@ -215,7 +216,7 @@ def build_rag_context(question: str, document_ids: list[int], top_k: int):
 
     context_parts = []
     citations = []
-    for r, (score, doc_id, chunk_idx, chunk) in enumerate(picked, start=1):
+    for r, (score, doc_id, chunk_idx, chunk,pdf_name) in enumerate(picked, start=1):
         context_parts.append(chunk["text"])
         citations.append({
             "rank": r,
@@ -223,7 +224,8 @@ def build_rag_context(question: str, document_ids: list[int], top_k: int):
             "document_id": doc_id,
             "page_from": chunk.get("page_from"),
             "page_to": chunk.get("page_to"),
-            "chunk_index": chunk_idx
+            "chunk_index": chunk_idx,
+            "document_name": pdf_name,
         })
 
     context = "\n\n---\n\n".join(context_parts)
@@ -317,7 +319,7 @@ def sse_event(data: dict, event: str = "message") -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 @app.get("/chat/stream")
-def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "ollama"):
+def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "ollama", document_name: str = ""):
     # 테스트용 시간 측정 시작
     start = time.time()
 
@@ -331,7 +333,8 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
         document_id=first_id,
         question=q,
         top_k=topK,
-        model=model
+        model=model,
+        document_name = document_name,
     )
 
     def gen():
@@ -373,7 +376,7 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
                     """
             else:
                 # [RAG 대화]
-                context, citations = build_rag_context(req.question, [req.document_id], req.top_k)
+                context, citations = build_rag_context(req.question, [req.document_id], req.top_k,req.document_name)
                 prompt = build_rag_prompt(req.question, context, history_text)
                 print(prompt)
 

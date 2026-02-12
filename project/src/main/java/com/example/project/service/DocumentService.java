@@ -4,9 +4,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,9 +15,9 @@ import com.example.project.domain.Document;
 import com.example.project.domain.DocumentStatus;
 import com.example.project.repository.DocumentRepository;
 
-import org.springframework.beans.factory.annotation.Value;
 
 @Service
+
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
@@ -132,6 +133,7 @@ public class DocumentService {
          Path rootPath = Path.of(System.getProperty("user.dir"));
          Path dataPath = rootPath.resolve("data").resolve("doc_"+ documentId);
          try {
+            System.out.println("벡터 데이터 삭제: " + dataPath);
             Files.deleteIfExists(dataPath.resolve("chunks.json"));
             Files.deleteIfExists(dataPath.resolve("index.faiss"));
             Files.deleteIfExists(dataPath); // 폴더 삭제 (비어있어야 삭제됨)

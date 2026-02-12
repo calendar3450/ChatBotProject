@@ -33,6 +33,10 @@ if (!userId) {
   localStorage.setItem('userId', userId)
 }
 
+// 테스트용 userId
+// const userId = "user123123123"
+
+
 // 답변이 오면 스크롤이 내려감.
 async function scrollToBottom() {
   await nextTick() //Promise 체이닝 기법.
@@ -95,15 +99,17 @@ async function uploadFiles(fileList,userId) {
 
 /** 문서 목록 로딩 */
 async function loadDocuments(isBackground = false) {
+  console.log(userId)
   if (!isBackground) loadingDocs.value = true
   docError.value = ''
   try {
-    const res = await fetch('/documents')
+  const res = await fetch(`/documents/${userId}`)
     if (!res.ok) {
       docError.value = `문서 목록 에러: ${res.status} ${await res.text()}`
       documents.value = []
       return
     }
+    
     const data = await res.json()
 
     // [Smart Polling] '인덱싱 중'인 문서가 하나라도 있으면 2초 뒤에 조용히 다시 조회
@@ -329,7 +335,6 @@ async function sendStream() {
     if (es) es.close()
     es = null
   }
-
 }
 
 // 300초마다 문서 목록 갱신
@@ -463,7 +468,6 @@ function statusLabel(s) {
               {{ d.title || ('문서 #' + d.id) }}
             </div>
             <div class="doc-sub">
-              #{{ d.id }}
               <span v-if="d.status" class="badge" :class="'st-' + d.status">
                 {{ statusLabel(d.status) }}
               </span>
@@ -495,7 +499,6 @@ function statusLabel(s) {
             <span class="toggle-text">{{ useGemini ? 'Gemini' : 'Qwen3' }}</span>
           </label>
         </div>
-        <div class="meta">선택 문서 IDs: {{ selectedDocIds.join(', ') || '없음' }}</div>
       </header>
 
       <main class="chat" ref="chatRef" @scroll="onScroll" @wheel="onWheel">
@@ -507,7 +510,7 @@ function statusLabel(s) {
               <summary>근거 보기 ({{ m.citations.length }})</summary>
               <ul>
                 <li v-for="c in m.citations" :key="c.rank">
-                  문서 {{ c.document_id ?? '?' }},
+                  문서 {{ c ?? '?' }},
                   p.{{ c.page_from }}~{{ c.page_to }}
                   <!-- score={{ fmtScore(c.score) }} -->
                 </li>
