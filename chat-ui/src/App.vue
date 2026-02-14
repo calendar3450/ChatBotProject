@@ -99,7 +99,6 @@ async function uploadFiles(fileList,userId) {
 
 /** 문서 목록 로딩 */
 async function loadDocuments(isBackground = false) {
-  console.log(userId)
   if (!isBackground) loadingDocs.value = true
   docError.value = ''
   try {
@@ -136,8 +135,9 @@ async function loadMessages() {
   hasMore.value = true
 
   try {
-    // Spring GET /chats (첫 페이지 20개)
-    const res = await fetch('/chats?page=0&size=20')
+    // Spring GET /chats (첫 페이지 20개) 그리고 userId까지
+    const res = await fetch(`/chats?page=0&size=20${userId ? `&userId=${userId}` : ''}`)
+
     if (!res.ok) {
       chatError.value = `채팅 목록 에러: ${res.status} ${await res.text()}`
       
@@ -264,7 +264,12 @@ async function sendStream() {
   const targetIds = selectedDocIds.value.length > 0 ? selectedDocIds.value : [0]
   const docIdsParam = targetIds.join(',')
   const model = useGemini.value ? 'gemini' : 'ollama'
-  const url = `/chats/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5&model=${model}`
+  
+  // 선택된 문서들의 제목을 가져와서 연결
+  const selectedDocs = documents.value.filter(d => selected.value.has(d.id))
+  const documentName = selectedDocs.map(d => d.title).join(', ')
+
+  const url = `/chats/stream?docIds=${encodeURIComponent(docIdsParam)}&q=${encodeURIComponent(q)}&topK=5&model=${model}&documentName=${encodeURIComponent(documentName)}&userId=${userId}`
   
 
   // Java 서버의 /chats/stream 엔드포인트로 GET 요청 (DB 저장 후 Python으로 중계)
@@ -510,7 +515,7 @@ function statusLabel(s) {
               <summary>근거 보기 ({{ m.citations.length }})</summary>
               <ul>
                 <li v-for="c in m.citations" :key="c.rank">
-                  문서 {{ c ?? '?' }},
+                  문서 {{ c.document_name?? '?' }},
                   p.{{ c.page_from }}~{{ c.page_to }}
                   <!-- score={{ fmtScore(c.score) }} -->
                 </li>

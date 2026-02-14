@@ -72,16 +72,20 @@ public class PythonClientService {
     // 그대로 읽어서 vue로 전달 + 완료 시 콜백 호출
     public void forwardSseToClient(ChatRequest req, SseEmitter emitter, Consumer<String> onComplete) throws Exception {
         // ✅ Python이 GET 방식으로 변경되었으므로, 쿼리 파라미터로 변환
+        // URLEncoder을 사용하여 한국어를 인코딩하여 url에 넣고 전달.
         String docIds = req.getDocumentIds().toString().replaceAll("[\\[\\] ]", ""); // [1, 2] -> 1,2
         String q = URLEncoder.encode(req.getQuestion(), StandardCharsets.UTF_8);
         int topK = (req.getTopK() == null) ? 3 : req.getTopK();
         String model = req.getModel();
+        String documentName = URLEncoder.encode(req.getDocumentName() == null ? "" : req.getDocumentName(), StandardCharsets.UTF_8);
+        String userId = req.getUserId();
+
 
         // URL 생성: /chat/stream?docIds=1,2&q=질문&topK=3 여기서 모델을 인식해야함
-        String query = String.format("?docIds=%s&q=%s&topK=%d&model=%s", docIds, q, topK, model);
+        String query = String.format("?docIds=%s&q=%s&topK=%d&model=%s&document_name=%s&user_id=%s", docIds, q, topK, model, documentName,userId);
         URL url = new URL(baseUrl + "/chat/stream" + query);
 
-        // 파이썬 연결 시키기.
+        // 파이썬 연결 시키기. 파이썬의 "/chat/stream"로 연결 
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("GET"); // GET으로 변경
         con.setRequestProperty("Accept", "text/event-stream"); // 파이썬과 연결 성공.

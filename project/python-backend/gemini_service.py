@@ -1,7 +1,8 @@
 import google.generativeai as genai
+import os
 
-# ⚠️ 보안 경고: API 키가 코드에 노출되었습니다. 테스트 후 반드시 키를 재발급받고 환경 변수로 관리하세요.
-GEMINI_API_KEY = "AIzaSyBXWSMtiVj48WSbIfY30Ua3JEFY8sPFFdM"
+# 환경 변수에서 API 키를 가져옵니다. 환경 변수가 없을 경우를 대비해 기본값을 설정하거나 예외 처리를 할 수 있습니다.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBXWSMtiVj48WSbIfY30Ua3JEFY8sPFFdM")
 
 def generate_gemini(text: str, stream: bool = False):
     """

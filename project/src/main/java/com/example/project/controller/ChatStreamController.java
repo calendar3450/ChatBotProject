@@ -33,11 +33,10 @@ public class ChatStreamController {
 
         executor.submit(() -> {
             try {
-
                 pythonClientService.forwardSseToClient(req, emitter,
                         (fullAnswer) -> {
-                            chatHistoryService.saveMessage("user", req.getQuestion());
-                            chatHistoryService.saveMessage("assistant", fullAnswer);
+                            chatHistoryService.saveMessage("user", req.getQuestion(),req.getUserId());
+                            chatHistoryService.saveMessage("assistant", fullAnswer,req.getUserId());
                         });
                 emitter.complete();
             } catch (Exception e) {
@@ -64,12 +63,19 @@ public class ChatStreamController {
     public SseEmitter chatStreamGet(@RequestParam("docIds") String docIds,
             @RequestParam("q") String q,
             @RequestParam(value = "topK", required = false) Integer topK,
-            @RequestParam("model") String model) {
+            @RequestParam("model") String model,
+            @RequestParam("documentName") String documentName,
+            @RequestParam(value = "userId", required = false) String userId) {
+
         ChatRequest req = new ChatRequest();
+
         req.setDocumentIds(parseIds(docIds));
         req.setQuestion(q);
         req.setTopK(topK == null ? 5 : topK);
         req.setModel(model);
+        req.setDocumentName(documentName);
+        req.setUserId(userId);
+
         return chatStream(req);
     }
 }

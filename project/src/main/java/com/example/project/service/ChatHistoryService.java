@@ -23,10 +23,11 @@ public class ChatHistoryService {
     }
 
     // DB에 저장하려고 msg에서 각각의 것들 빼와 가져오고 저장.
-    public void saveMessage(String role, String content) {
+    public void saveMessage(String role, String content,String userId) {
         ChatMessage msg = new ChatMessage();
         msg.setRole(role);
         msg.setContent(content);
+        msg.setUserId(userId);
         chatMessageRepository.save(msg);
 
     }

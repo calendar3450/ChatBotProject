@@ -207,7 +207,7 @@ def build_rag_context(question: str, document_ids: list[int], top_k: int, docume
             scores, ids = index.search(qv, real_top_k)
             for rank, idx in enumerate(ids[0].tolist()):
                 if idx < 0: continue
-                merged.append((float(scores[0][rank]), doc_id, idx, chunks[idx]))
+                merged.append((float(scores[0][rank]), doc_id, idx, chunks[idx], document_name))
         except FileNotFoundError:
             continue
 
@@ -319,7 +319,7 @@ def sse_event(data: dict, event: str = "message") -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 @app.get("/chat/stream")
-def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "ollama", document_name: str = ""):
+def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "ollama", document_name: str = "",user_id: str = ""):
     # 테스트용 시간 측정 시작
     start = time.time()
 
@@ -335,6 +335,7 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
         top_k=topK,
         model=model,
         document_name = document_name,
+        user_id = user_id,
     )
 
     def gen():
@@ -378,7 +379,6 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
                 # [RAG 대화]
                 context, citations = build_rag_context(req.question, [req.document_id], req.top_k,req.document_name)
                 prompt = build_rag_prompt(req.question, context, history_text)
-                print(prompt)
 
             # --- 3) 모델 호출 및 스트리밍 전송 ---
             if req.model == 'gemini':

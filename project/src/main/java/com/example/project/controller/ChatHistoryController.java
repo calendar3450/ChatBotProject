@@ -30,12 +30,14 @@ public class ChatHistoryController {
     // 챗 기록들 가져오기.
     @GetMapping("/chats")
     public List<ChatResponse> list(@RequestParam(name = "page", defaultValue = "0") int page,
-                                   @RequestParam(name = "size", defaultValue = "20") int size) {
+                                   @RequestParam(name = "size", defaultValue = "20") int size,
+                                    @RequestParam(name = "userId",defaultValue = "") String userId) {
         // 최신순(내림차순)으로 페이징하여 가져옴
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(page, size ,Sort.by("createdAt").descending());
         
         List<ChatResponse> list = chatMessageRepository.findAll(pageable)
                 .stream()
+                .filter(chat -> userId.equals(chat.getUserId()))
                 .map(ChatResponse::from)
                 .toList();
         

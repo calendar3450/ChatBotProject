@@ -16,8 +16,8 @@ import org.hibernate.annotations.CreationTimestamp;
 public class ChatMessage {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
+    private Long id; // 일반 기본 키 id 순서
+    private String userId; // 유저 id
     private String role; // "user" 또는 "assistant"
 
     @Lob
@@ -29,11 +29,17 @@ public class ChatMessage {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 
 }

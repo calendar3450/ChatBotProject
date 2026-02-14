@@ -16,6 +16,7 @@ public class ChatRequest {
     private String model = "qwen3-vl:8b";
     private String userId;
     private String documentName;
+    
 
     public List<Long> getDocumentIds() { return documentIds; }
     public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
