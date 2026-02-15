@@ -165,8 +165,14 @@ def save_doc_store(doc_id, chunks, vectors):
     index.add(vectors)
     faiss.write_index(index, str(doc_dir / "index.faiss"))
 
+# ✅ 간단한 인메모리 캐시 (doc_id -> (chunks, index))
+DOC_CACHE = {}
 
 def load_doc_store(doc_id):
+    # 1. 캐시에 있으면 바로 반환 (디스크 I/O 제거)
+    if doc_id in DOC_CACHE:
+        return DOC_CACHE[doc_id]
+
     doc_dir = DATA_DIR / f"doc_{doc_id}"
     chunks_path = doc_dir / "chunks.json"
     index_path = doc_dir / "index.faiss"
@@ -176,6 +182,9 @@ def load_doc_store(doc_id):
 
     chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
     index = faiss.read_index(str(index_path))
+    
+    # 2. 로드된 데이터를 캐시에 저장
+    DOC_CACHE[doc_id] = (chunks, index)
     return chunks, index
 
 
@@ -293,6 +302,9 @@ def ingest(req: IngestRequest):
 
         for doc_id in req.document_id:
             save_doc_store(doc_id, chunks, vecs)
+
+            # ✅ 문서가 업데이트되었으므로 캐시 초기화 (다음 검색 때 새로 로드)
+            DOC_CACHE.pop(doc_id, None)
 
         return IngestResponse(
             document_id=req.document_id[0],

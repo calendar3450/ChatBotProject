@@ -130,8 +130,7 @@ public class DocumentService {
          }
 
          // 서버 내 데이터 청크 벡터 제거
-         Path rootPath = Path.of(System.getProperty("user.dir"));
-         Path dataPath = rootPath.resolve("data").resolve("doc_"+ documentId);
+         Path dataPath = Path.of("data").toAbsolutePath().resolve("doc_" + documentId);
          try {
             System.out.println("벡터 데이터 삭제: " + dataPath);
             Files.deleteIfExists(dataPath.resolve("chunks.json"));

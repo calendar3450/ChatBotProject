@@ -20,7 +20,7 @@ import com.example.project.service.PythonClientService;
 public class ChatStreamController {
     private final PythonClientService pythonClientService;
     private final ChatHistoryService chatHistoryService;
-    private final ExecutorService executor = Executors.newFixedThreadPool(100);
+    private final ExecutorService executor = Executors.newFixedThreadPool(20); // 로컬 PC 부하 방지
 
     public ChatStreamController(PythonClientService pythonClientService, ChatHistoryService chatHistoryService) {
         this.pythonClientService = pythonClientService;
