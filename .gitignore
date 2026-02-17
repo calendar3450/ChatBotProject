@@ -6,7 +6,7 @@ build/
 !**/src/test/**/build/
 uploads/
 data/
-python-backend/test.ipynb
+python-backend/gemini_service.py
 
 ### STS ###
 .apt_generated
