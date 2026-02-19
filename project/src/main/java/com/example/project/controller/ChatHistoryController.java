@@ -35,9 +35,8 @@ public class ChatHistoryController {
         // 최신순(내림차순)으로 페이징하여 가져옴
         Pageable pageable = PageRequest.of(page, size ,Sort.by("createdAt").descending());
         
-        List<ChatResponse> list = chatMessageRepository.findAll(pageable)
+        List<ChatResponse> list = chatMessageRepository.findByUserId(userId, pageable)
                 .stream()
-                .filter(chat -> userId.equals(chat.getUserId()))
                 .map(ChatResponse::from)
                 .toList();
         
@@ -49,7 +48,7 @@ public class ChatHistoryController {
 
     // Python 서버가 호출할 API: 최근 대화 기록을 프롬프트용 포맷으로 반환
     @GetMapping("/chats/history")
-    public List<Map<String, String>> getHistoryForPrompt(@RequestParam(name = "limit", defaultValue = "10") int limit) {
-        return chatHistoryService.getRecentMessagesForPrompt(limit);
+    public List<Map<String, String>> getHistoryForPrompt(@RequestParam(name = "limit", defaultValue = "20") int limit,@RequestParam(name = "userId",defaultValue = "") String userId) {
+        return chatHistoryService.getRecentMessagesForPrompt(limit,userId);
     }
 }

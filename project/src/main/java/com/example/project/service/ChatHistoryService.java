@@ -33,10 +33,12 @@ public class ChatHistoryService {
     }
 
     // 최근 대화 내용을 가져와서 Python 서버에 보낼 형식(List<Map>)으로 변환
-    public List<Map<String, String>> getRecentMessagesForPrompt(int limit) {
+    public List<Map<String, String>> getRecentMessagesForPrompt(int limit, String userId) {
         // 1. DB에서 최신순으로 limit개 가져오기 (createdAt 기준 내림차순)
         Pageable pageable = PageRequest.of(0, limit, Sort.by("createdAt").descending());
-        List<ChatMessage> messages = chatMessageRepository.findAll(pageable).getContent();
+        
+        // [수정] findAll() 후 필터링하면 다른 사람 글 때문에 내 글이 잘릴 수 있음 -> DB 조회 단계에서 필터링
+        List<ChatMessage> messages = chatMessageRepository.findByUserId(userId, pageable);
 
         // 2. 과거 -> 최신 순으로 정렬 (LLM 문맥 유지를 위해 뒤집기)
         List<ChatMessage> reversed = new ArrayList<>(messages);

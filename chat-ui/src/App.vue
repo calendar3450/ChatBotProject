@@ -1,6 +1,5 @@
 
 <script setup>
-// import { useApp } from './useApp.js'
 import { ref, onMounted, computed, nextTick, reactive } from 'vue'
 const documents = ref([])
 const selected = ref(new Set())
@@ -167,6 +166,7 @@ async function loadMessages() {
 
 // 과거 메시지 더 불러오기 (무한 스크롤)
 async function loadMoreMessages() {
+
   if (!hasMore.value || loadingHistory.value) return
   
   loadingHistory.value = true
@@ -174,7 +174,10 @@ async function loadMoreMessages() {
   
   try {
     const nextPage = page.value + 1
-    const res = await fetch(`/chats?page=${nextPage}&size=20`)
+    const url = `/chats?page=${nextPage}&size=20${userId ? `&userId=${userId}` : ''}`
+    console.log('[loadMoreMessages] 요청 URL:', url)
+    const res = await fetch(url)
+
     if (!res.ok) return
 
     const data = await res.json()
@@ -196,7 +199,9 @@ async function loadMoreMessages() {
 }
 
 function onScroll(e) {
-  if (e.target.scrollTop === 0) {
+  // scrollTop이 0에 매우 가까운 소수점 값일 수 있으므로,
+  // 1 미만일 때를 조건으로 하는 것이 더 안정적입니다.
+  if (e.target.scrollTop < 1) {
     loadMoreMessages()
   }
 }
@@ -498,6 +503,7 @@ function statusLabel(s) {
     <section class="main">
       <header class="topbar">
         <div class="header-left">
+          <!-- 제목 뒤에 v2, v3 등을 붙여서 배포가 잘 됐는지 확인하세요 -->
           <div class="title">Doc Chat</div>
           <label class="model-toggle">
             <input type="checkbox" v-model="useGemini">

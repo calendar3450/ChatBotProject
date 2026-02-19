@@ -10,10 +10,11 @@ except ImportError:
 
 def generate_gemini(text: str, stream: bool = False):
     """
-    Gemini 모델을 사용하여 텍스트를 생성합니다.
+    Gemini 모델을 사용
     """
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-2.5-flash')
+    response = model.generate_content(text, stream=stream)
+    print(f"프롬프트 토큰: {response.usage_metadata.prompt_token_count}")
     
-    
-    return model.generate_content(text, stream=stream)
+    return response

@@ -62,6 +62,7 @@ class ChatRequest(BaseModel):
     per_doc : int = 3
     model: str = "ollama" # "ollama" or "gemini"
     document_name: str = ""
+    user_id: str = ""
     
 
 class ChatResponse(BaseModel):
@@ -268,12 +269,12 @@ def build_rag_prompt(question: str, context: str, history_text: str = ""):
 [답변]
 """
 
-# Spring Boot에서 채팅 기록을 가져오는 헬퍼 함수 (내부 사용)
-def fetch_chat_history_text(limit: int = 20) -> str:
+# Spring Boot에서 채팅 기록을 가져오는 헬퍼 함수
+def fetch_chat_history_text(user_id: str, limit: int = 20) -> str:
     history_text = ""
     try:
         # Spring Boot의 /chats/history API 호출
-        resp = requests.get(f"{SPRING_BOOT_URL}/chats/history", params={"limit": limit}, timeout=2)
+        resp = requests.get(f"{SPRING_BOOT_URL}/chats/history", params={"limit": limit, "userId": user_id}, timeout=2)
         if resp.status_code == 200:
             for msg in resp.json():
                 role = "User" if msg.get("role") == "user" else "Assistant"
@@ -359,7 +360,7 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
         try:
             # 0) Spring Boot에서 채팅 기록 가져오기 (Pull 방식)
             # 함수를 호출하여 깔끔하게 처리
-            history_text = fetch_chat_history_text(limit=20)
+            history_text = fetch_chat_history_text(user_id=req.user_id, limit=20)
 
             # --- 2) 프롬프트 및 컨텍스트 구성 ---
             if req.document_id == 0:
