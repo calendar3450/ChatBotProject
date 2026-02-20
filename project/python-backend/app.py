@@ -31,7 +31,8 @@ DATA_DIR.mkdir(exist_ok=True)
 
 OLLAMA_BASE = "http://localhost:11434"
 OLLAMA_MODEL = "qwen3-vl:8b"
-SPRING_BOOT_URL = "http://localhost:8080"
+# Windows 환경에서 localhost 사용 시 DNS 해석 지연(약 1~2초)이 발생할 수 있어 127.0.0.1로 변경
+SPRING_BOOT_URL = "http://127.0.0.1:8080"
 
 # # 테스트용.
 # class PingResponse(BaseModel):

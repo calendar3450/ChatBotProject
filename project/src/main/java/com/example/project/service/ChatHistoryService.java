@@ -38,7 +38,13 @@ public class ChatHistoryService {
         Pageable pageable = PageRequest.of(0, limit, Sort.by("createdAt").descending());
         
         // [수정] findAll() 후 필터링하면 다른 사람 글 때문에 내 글이 잘릴 수 있음 -> DB 조회 단계에서 필터링
+        long startTime = System.currentTimeMillis(); // 시작 시간
+        
         List<ChatMessage> messages = chatMessageRepository.findByUserId(userId, pageable);
+
+        long endTime = System.currentTimeMillis(); // 종료 시간
+        System.out.println("DB 조회 소요 시간: " + (endTime - startTime) + "ms");
+        
 
         // 2. 과거 -> 최신 순으로 정렬 (LLM 문맥 유지를 위해 뒤집기)
         List<ChatMessage> reversed = new ArrayList<>(messages);
