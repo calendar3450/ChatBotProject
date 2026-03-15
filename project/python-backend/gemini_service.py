@@ -3,7 +3,7 @@ import os
 
 try:
     import config
-    GEMINI_API_KEY = "AIzaSyBY9T-3mdjYEpUhNAynOd6TfnRs9VKY6lc"
+    GEMINI_API_KEY = "YOUR API"
 except ImportError:
     # config.py가 없으면 환경 변수에서 가져오거나 빈 값 처리
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
