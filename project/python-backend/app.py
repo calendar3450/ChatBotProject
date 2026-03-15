@@ -14,6 +14,9 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 import json, time
 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import gemini_service
 
@@ -191,20 +194,24 @@ def load_doc_store(doc_id):
 
 
 
-def ollama_generate(prompt: str) -> str:
+def ollama_stream(prompt: str):
     url = f"{OLLAMA_BASE}/api/generate"
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": prompt,
-        "stream": False
+        "stream": True
     }
 
-    r = requests.post(url, json=payload, timeout=120)
-    r.raise_for_status()
-
-    # ✅ 핵심: bytes -> utf-8 로 확정 디코딩 후 JSON 파싱
-    data = json.loads(r.content.decode("utf-8"))
-    return (data.get("response") or "").strip()
+    with requests.post(url, json=payload, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        for line in r.iter_lines():
+            if line:
+                data = json.loads(line.decode("utf-8"))
+                chunk = data.get("response", "")
+                if chunk:
+                    yield chunk
+                if data.get("done"):
+                    break
 
 # RAG 검색 및 컨텍스트 생성 함수
 def build_rag_context(question: str, document_ids: list[int], top_k: int, document_name: str):
@@ -391,8 +398,35 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
                     """
             else:
                 # [RAG 대화]
-                context, citations = build_rag_context(req.question, [req.document_id], req.top_k,req.document_name)
-                prompt = build_rag_prompt(req.question, context, history_text)
+                context, citations = build_rag_context(req.question, [req.document_id], req.top_k, req.document_name)
+                # 유사도 점수가 THRESHOLD 미만이면 RAG 컨텍스트 없이 일반 대화로 전환
+                if citations and citations[0]["score"] >= THRESHOLD:
+                    prompt = build_rag_prompt(req.question, context, history_text)
+                else:
+                    citations = []
+                    if req.model == 'gemini':
+                        prompt = f"""당신은 유용한 한국어 어시스턴트입니다.
+                                    반드시 한국어로만 답변하세요. 이전 대화 보고 답변을 추론 하셔도 됩니다.
+
+                                    [이전 대화]
+                                    {history_text}
+
+                                    [질문]
+                                    {req.question}
+                                    """
+                    else:
+                        prompt = f"""당신은 유용한 한국어 어시스턴트입니다.
+                                    반드시 한국어로만 답변하세요. 중국어 언어는 절대 사용하지 마세요.
+                                    사용자의 질문에 정확하고 간결하게 답하세요. 모르면 모른다고 하세요.
+                                    이전 대화 보고 답변을 추론 하셔도 됩니다.
+
+                                    [이전 대화]
+                                    {history_text}
+
+                                    [질문]
+                                    {req.question}
+                                    [답변]
+                                    """
 
             # --- 3) 모델 호출 및 스트리밍 전송 ---
             if req.model == 'gemini':
@@ -403,9 +437,9 @@ def chat_stream(docIds: str = "0", q: str = "", topK: int = 3, model: str = "oll
                         text_chunk = chunk.text
                         yield sse_event({"type": "delta", "text": text_chunk}, event="delta")
             else:
-                # Ollama (현재 구현상 non-streaming이므로 한 번에 전송)
-                answer = ollama_generate(prompt)
-                yield sse_event({"type": "delta", "text": answer}, event="delta")
+                # Ollama 스트리밍
+                for chunk in ollama_stream(prompt):
+                    yield sse_event({"type": "delta", "text": chunk}, event="delta")
             
             # --- 4) 종료 이벤트 (citations 포함) ---
             yield sse_event({"type": "end", "citations": citations}, event="meta")
