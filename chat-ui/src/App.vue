@@ -24,12 +24,31 @@ const loadingHistory = ref(false)
 //값을 자동으로 갱신하여 set집합에 데이터를 보냄.
 const selectedDocIds = computed(() => Array.from(selected.value))
 
-// 유저 스토리지 저장
-let userId = localStorage.getItem('userId')
-// 새로운 유저라면, 생성.
+// 유저 스토리지 저장 (localStorage / crypto 예외 시에도 앱이 마운트되도록)
+function readStoredUserId() {
+  try {
+    return localStorage.getItem('userId')
+  } catch {
+    return null
+  }
+}
+function writeStoredUserId(id) {
+  try {
+    localStorage.setItem('userId', id)
+  } catch {
+    /* 사생활 보호 모드 등 */
+  }
+}
+function newFallbackUserId() {
+  return `u-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+}
+let userId = readStoredUserId()
 if (!userId) {
-  userId = crypto.randomUUID()
-  localStorage.setItem('userId', userId)
+  userId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : newFallbackUserId()
+  writeStoredUserId(userId)
 }
 
 // 테스트용 userId

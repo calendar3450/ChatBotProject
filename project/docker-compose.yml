@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
@@ -21,3 +20,35 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # Spring 앱용 DB (Docker 네트워크 내부: 앱 → mariadb:3306, 비밀번호와 DB명은 application.properties와 동일)
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: mjk020
+      MARIADB_DATABASE: chatbot_db
+    ports:
+      # 호스트에 이미 MariaDB가 3306을 쓰는 경우가 많아 3307로 노출
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 25s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: calender3450/jkportfolio:1.0-mac
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/chatbot_db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: mjk020
+      PYTHON_BASE_URL: http://host.docker.internal:8000
+    depends_on:
+      mariadb:
+        condition: service_healthy
